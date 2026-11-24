@@ -385,7 +385,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
-import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
+import { mergeGeometries, mergeVertices, toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
@@ -1030,6 +1030,7 @@ const swatchOf = (item,v) => { const vals=Object.entries(v).filter(([k,x])=>k!==
    so idle retargeting, ragdoll, reactions and walking all keep working. Every part is bound
    100% to one bone (rigid, like an action figure). Units: 2 = top of the cap, faces +Z, his left = +X.
    ============================================================ */
+const TPL_CREASE = THREE.MathUtils.degToRad(70);   // smoothing angle for the template's normals
 const TPL_BONES = ['World_Bone','Chest','Head','Left_Arm','Right_Arm','Left_Elbow','Right_Elbow','Left_Leg','Right_Leg','Left_Knee','Right_Knee'];
 function buildTemplate(obj){
   const src = {}; obj.traverse(o=>{ if (o.isMesh) src[o.name.toLowerCase()] = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry; });
@@ -1100,6 +1101,9 @@ function buildTemplate(obj){
     ['left_pants','bottom',splitY(L.leg, P.Left_Knee.y, false),'Left_Knee'], ['right_pants','bottom',splitY(R.leg, P.Right_Knee.y, false),'Right_Knee'],
     ['left_leg','shoes',L.shoe,'Left_Knee'], ['right_leg','shoes',R.shoe,'Right_Knee'],
   ];
+  // smooth shading: normals are averaged across faces that meet at less than TPL_CREASE, so curved surfaces read
+  // round while real hard edges (cap brim, soles, cuffs) stay crisp
+  for (const pc of pieces){ pc[2] = toCreasedNormals(pc[2], TPL_CREASE); pc[2].computeBoundingBox(); }
   for (const [name, colourPart, g, bone, bone2] of pieces){
     const n = g.attributes.position.count, bi = TPL_BONES.indexOf(bone), pos = g.attributes.position;
     const SI = new Uint16Array(n*4), SW = new Float32Array(n*4);
