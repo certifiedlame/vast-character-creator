@@ -257,11 +257,13 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
-const MODEL_URL = '../steve/Steve.gltf';
-const SKIN_URL  = '../steve/T_Steve.png';
+const TPL_URL   = '../Template_Character/Cristiano_Template.obj';   // the template character (unrigged OBJ, rigged in code below)
+const SKIN_URL  = '../steve/T_Steve.png';   // still feeds the skin-tone palette
 const IDLE_URL  = '../steve/idle_animation_mixamo.fbx';
 const PX = 1/16;               // one skin pixel in world units (Steve is 32px = 2 units tall)
 const $ = s => document.querySelector(s);
@@ -279,7 +281,7 @@ const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, alpha:true })
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.NeutralToneMapping;
-renderer.toneMappingExposure = 1.05;
+renderer.toneMappingExposure = 1.0;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
@@ -320,78 +322,74 @@ const MAX_CHARS = SLOTS.length;
 const lightTgt = new THREE.Object3D(); scene.add(lightTgt);
 key.target = lightTgt; rimL.target = lightTgt; rimR.target = lightTgt;
 
-/* ---- Rooms: each background is projection-mapped onto a crude box room (+ desk blocks) ----
-   The backgrounds are renders from a level camera at the room centre. A matching "projector"
-   camera paints the image onto the mockup, so small camera moves give real parallax while the
-   unmoved view reproduces the picture exactly. Units: Steve = 2 tall. */
+/* ---- Rooms: GREYBOX. Plain grey blockout boxes with a world-space grid, lit like a dev room.
+   Stand-ins for the final art: walls/floor/ceiling shell, desks (physics) and a few props (visual only).
+   ROOM.VTAN / ASPECT are the framing the camera was tuned to (the old background camera). Units: Steve = 2 tall. */
 const ROOM = { W:5.2, H:3.6, D:7.2, camH:1.28, VTAN:722/1679, ASPECT:2912/1632 };
-const projCam = new THREE.PerspectiveCamera(THREE.MathUtils.radToDeg(2*Math.atan(ROOM.VTAN)), ROOM.ASPECT, 0.1, 50);
-projCam.position.set(0, ROOM.camH, 0); projCam.lookAt(0, ROOM.camH, -1); projCam.updateMatrixWorld(true);
-const projVP = new THREE.Matrix4().multiplyMatrices(projCam.projectionMatrix, projCam.matrixWorldInverse);
 const wipeRes = new THREE.Vector2(1,1);
-// mode 0: plain · 1: incoming room, left of the wipe edge · 2: outgoing room, right of it
-function makeRoomMat(tex){
-  return new THREE.ShaderMaterial({
-    uniforms:{ map:{value:tex}, shift:{value:new THREE.Vector3()}, projVP:{value:projVP}, mode:{value:0}, edge:{value:0}, res:{value:wipeRes} },
-    vertexShader:`varying vec3 vW;
-      void main(){ vec4 w = modelMatrix*vec4(position,1.0); vW = w.xyz; gl_Position = projectionMatrix*viewMatrix*w; }`,
-    fragmentShader:`uniform sampler2D map; uniform mat4 projVP; uniform vec3 shift; uniform int mode; uniform float edge; uniform vec2 res; varying vec3 vW;
-      void main(){
-        float s = gl_FragCoord.x/res.x + (gl_FragCoord.y/res.y - 0.5)*0.16;
-        if (mode==1 && s > edge) discard;
-        if (mode==2 && s <= edge) discard;
-        vec4 p = projVP*vec4(vW+shift,1.0);
-        vec2 uv = clamp(p.xy/p.w*0.5+0.5, vec2(0.0005), vec2(0.9995));
-        vec3 col = texture2D(map, uv).rgb;
-        if (mode==1) col = mix(col, vec3(1.0), smoothstep(edge-0.01, edge, s)*0.85);
-        gl_FragColor = vec4(col, 1.0);
-        #include <colorspace_fragment>
-      }`,
-    toneMapped:false, side:THREE.DoubleSide,
-  });
+// grey standard material + 25 cm / 1 m grid lines; wipe: mode 1 = incoming room (left of the edge), 2 = outgoing (right of it)
+function makeRoomMat(color, u){
+  const m = new THREE.MeshStandardMaterial({ color, roughness:0.9, metalness:0, side:THREE.DoubleSide });
+  m.uniforms = u;
+  m.onBeforeCompile = sh=>{
+    Object.assign(sh.uniforms, u);
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vGW;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvGW = (modelMatrix*vec4(transformed,1.0)).xyz;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', `#include <common>
+        uniform int mode; uniform float edge; uniform vec2 res; varying vec3 vGW;
+        float gridAA(vec3 p, vec3 n, float s){
+          vec3 q = p/s, g = abs(fract(q-0.5)-0.5)/max(fwidth(q), vec3(1e-4)) + step(0.5, abs(n))*1e4;
+          return 1.0 - min(min(min(g.x,g.y),g.z), 1.0);
+        }`)
+      .replace('void main() {', `void main() {
+        float wS = gl_FragCoord.x/res.x + (gl_FragCoord.y/res.y - 0.5)*0.16;
+        if (mode==1 && wS > edge) discard;
+        if (mode==2 && wS <= edge) discard;`)
+      .replace('#include <color_fragment>', `#include <color_fragment>
+        vec3 gN = normalize(cross(dFdx(vGW), dFdy(vGW)));
+        diffuseColor.rgb *= 1.0 - 0.09*gridAA(vGW, gN, 0.25) - 0.22*gridAA(vGW, gN, 1.0);`)
+      .replace('#include <dithering_fragment>', `#include <dithering_fragment>
+        if (mode==1) gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(1.0), smoothstep(edge-0.01, edge, wS)*0.85);`);
+  };
+  return m;
 }
-function buildRoom(env, mat){
+const boxAt = (x0,x1,y0,y1,z0,z1,mat)=>{ const m = new THREE.Mesh(new THREE.BoxGeometry(x1-x0,y1-y0,z1-z0), mat); m.position.set((x0+x1)/2,(y0+y1)/2,(z0+z1)/2); m.receiveShadow = true; return m; };
+function buildRoom(env){
   const g = new THREE.Group(), { W, H } = ROOM, D = env.D;
-  const shell = new THREE.Mesh(new THREE.BoxGeometry(W, H, D+3), mat); shell.position.set(0, H/2, -(D+3)/2 + 3); g.add(shell);
-  for (const [x0,x1,z0,z1,h] of env.blocks){ const a=Math.max(z0,-D+0.05); const m=new THREE.Mesh(new THREE.BoxGeometry(x1-x0,h,z1-a), mat); m.position.set((x0+x1)/2,h/2,(a+z1)/2); g.add(m); }
+  const shell = new THREE.Mesh(new THREE.BoxGeometry(W, H, D+3), [env.mat, env.mat, env.matC, env.matF, env.mat, env.mat]); shell.position.set(0, H/2, -(D+3)/2 + 3); shell.receiveShadow = true; g.add(shell);
+  for (const [x0,x1,z0,z1,h] of env.blocks) g.add(boxAt(x0,x1,0,h,Math.max(z0,-D+0.05),z1, env.mat2));
+  for (const [x0,x1,y0,y1,z0,z1] of env.props||[]) g.add(boxAt(x0,x1,y0,y1,Math.max(z0,-D),z1, env.mat2));
   return g;
 }
-/* backgrounds share the camera; room depth D comes from where the floor meets the back wall
-   in each picture, blocks are the desk rows / teacher desk */
+/* blocks: desks/tables [x0,x1,z0,z1,height] (also physics) · props: [x0,x1,y0,y1,z0,z1] (visual only) */
+const DEV_LIGHT = { key:[0xffffff,1.3], rimL:[0xffffff,0.5], rimR:[0xffffff,0.4], sky:0xffffff, ground:0xc8cacd, hemi:0.85, envI:0.45, exp:1.0, shadow:0 };
 const ENVS = [
-  { id:'klas', name:'Klaslokaal', file:'background game.png', D:7.2,
+  { id:'klas', name:'Klaslokaal', D:7.2, grey:0xc9cacc, greyB:0x9c9ea2,
     blocks:[[-2.6,-1.48,-6.7,-3.55,0.82],[1.58,2.6,-6.7,-3.55,0.82],[-0.95,0.85,-7.15,-6.75,0.78]],
-    dust:[0xeeebe4,0xdcd8cf,0xf6f4ef],
-    light:{ key:[0xfff3e2,1.15], rimL:[0xe4eeff,3.4], rimR:[0xeef3ff,2.6], sky:0xf4f7ff, ground:0xc9ccd2, hemi:0.35, envI:1.05, exp:1.05, shadow:0.16 } },
-  { id:'zon', name:'Zonnig lokaal', file:'uni_verse_studio_empty_Dutch_primary_school_classroom_as_a_vi_54e3a627-6354-48f2-a4f9-8bbedac0539f_2.png', D:6.2,
+    props:[[-1.3,1.3,1.05,2.3,-7.2,-7.14], [-2.6,-2.52,1.0,2.6,-6.2,-4.6], [-2.6,-2.52,1.0,2.6,-4.2,-2.6]],   // board, two windows
+    dust:[0xd6d7d9,0xc4c5c8,0xe6e7e8], light:DEV_LIGHT },
+  { id:'zon', name:'Lokaal 2', D:6.2, grey:0xc2c4c7, greyB:0x939599,
     blocks:[[-2.6,-1.5,-6.0,-3.55,0.8],[1.6,2.6,-6.0,-3.55,0.8],[1.0,2.6,-6.2,-5.85,0.72]],
-    dust:[0xe2bf93,0xd2aa7c,0xf0dcbd],
-    light:{ key:[0xffdcb4,1.0], rimL:[0xffc68a,4.6], rimR:[0xffe0bb,2.1], sky:0xfff0dc, ground:0xa8845f, hemi:0.3, envI:0.95, exp:1.0, shadow:0.24 } },
-  { id:'buiten', name:'Buiten', file:'uni_verse_studio_outside_instead_--ar_9151_--sref_httpss.mj.r_163812eb-5b6f-4020-b2c1-ed0a7971c1d1_3.png', D:6.5,
+    props:[[-2.3,-0.4,1.0,2.1,-6.2,-6.14], [2.52,2.6,0,2.2,-5.6,-4.7], [-2.6,-2.52,1.0,2.6,-5.6,-3.0]],   // board, door, window
+    dust:[0xcfd0d2,0xbdbec1,0xe1e2e3], light:{ ...DEV_LIGHT, key:[0xffffff,1.2], envI:0.42 } },
+  { id:'buiten', name:'Buiten', D:6.5, grey:0xd0d1d3, greyB:0x9a9ca0,
     blocks:[[-2.6,-1.5,-6.1,-3.55,0.8],[1.6,2.6,-6.1,-3.55,0.8],[-0.95,1.05,-6.45,-6.0,0.7]],
-    dust:[0xd6b893,0xc2a07a,0xe8d6b8],
-    light:{ key:[0xfff4e0,1.6], rimL:[0xe8f2ff,2.8], rimR:[0xf2f7ff,2.4], sky:0xdcecff, ground:0x8f9a6e, hemi:0.45, envI:1.1, exp:1.03, shadow:0.26 } },
+    props:[[-2.2,-1.98,0,1.55,-6.45,-6.22], [-2.6,-1.55,1.5,2.5,-6.5,-5.95], [2.0,2.22,0,1.3,-6.45,-6.22], [1.65,2.6,1.25,2.05,-6.5,-6.0]],   // two block trees
+    dust:[0xd3d4d6,0xc0c1c4,0xe4e5e6], light:{ ...DEV_LIGHT, key:[0xffffff,1.45], hemi:0.95, envI:0.5 } },
 ];
 let envI = 0, wipe = null, ENV_D = 7.2, envBusy = false;
-function loadEnv(env, onProg){
+// neutral studio reflections (three's RoomEnvironment), shared by every greybox room
+const devEnvMap = (()=>{ const pm = new THREE.PMREMGenerator(renderer); const t = pm.fromScene(new RoomEnvironment(), 0.04).texture; pm.dispose(); return t; })();
+function loadEnv(env){
   if (env.ready) return env.ready;
-  env.ready = new THREE.TextureLoader().loadAsync('../'+encodeURIComponent(env.file), onProg).then(tex=>{
-    tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
-    env.tex = tex; env.mat = makeRoomMat(tex); env.group = buildRoom(env, env.mat); env.group.visible = false; scene.add(env.group);
-    captureEnv(env); return env;
-  });
-  env.ready.catch(()=>{ env.ready = null; });
-  return env.ready;
-}
-// image-based lighting captured from the projected room, centred on the front spot
-function captureEnv(env){
-  const centre = CHAR_POS.clone().setY(0.9);
-  const m = makeRoomMat(env.tex); m.uniforms.shift.value.copy(centre);
-  const g = buildRoom(env, m); g.position.copy(centre).negate();
-  const sc = new THREE.Scene(); sc.add(g);
-  const pm = new THREE.PMREMGenerator(renderer);
-  env.envMap = pm.fromScene(sc, 0.06, 0.05, 30).texture;
-  pm.dispose(); m.dispose(); g.traverse(o=>{ if (o.isMesh) o.geometry.dispose(); });
+  const u = { mode:{value:0}, edge:{value:0}, res:{value:wipeRes} };   // shared by both materials, so the wipe drives the whole room
+  env.mat = makeRoomMat(env.grey, u); env.mat2 = makeRoomMat(env.greyB, u);
+  env.matF = makeRoomMat(new THREE.Color(env.grey).multiplyScalar(0.8), u); env.matC = makeRoomMat(new THREE.Color(env.grey).lerp(new THREE.Color(0xffffff), 0.4), u);
+  env.group = buildRoom(env); env.group.visible = false; scene.add(env.group);
+  env.envMap = devEnvMap;
+  return env.ready = Promise.resolve(env);
 }
 const _c1 = new THREE.Color(), _c2 = new THREE.Color();
 function mixLight(a, b, k){
@@ -442,7 +440,7 @@ function updateWipe(dt){
 }
 
 const floorShadow = new THREE.Mesh(new THREE.PlaneGeometry(5.2,6), new THREE.ShadowMaterial({opacity:0.16}));
-floorShadow.rotation.x = -Math.PI/2; floorShadow.position.set(0, 0.003, -4.6); floorShadow.receiveShadow = true; scene.add(floorShadow);
+floorShadow.rotation.x = -Math.PI/2; floorShadow.position.set(0, 0.003, -4.6); floorShadow.receiveShadow = true; floorShadow.visible = false; scene.add(floorShadow);   // greybox floor receives real shadows
 
 /* ---- character holders: turntable (position + spin) > bounce (squash, hop, tilt) > model ---- */
 const blobTex = (()=>{ // soft contact shadow that grounds the feet
@@ -536,8 +534,8 @@ const darker = (hex,k=0.75)=>{ const [r,g,b]=shadeRGB(rgb(hex),k); return (r<<16
 const CATS = [
   {id:'hair',  name:'Haar',        icon:['..####..','.######.','########','##....##','##....##','#......#','#......#','#......#'], cam:{y:1.72,d:1.75,yaw:0.45}},
   {id:'hat',   name:'Hoofddeksels',icon:['........','..####..','.######.','.######.','.######.','########','########','........'], cam:{y:1.78,d:1.85,yaw:0.45}},
-  {id:'top',   name:'Bovenkant',   icon:['##....##','########','########','########','..####..','..####..','..####..','..####..'], cam:{y:1.12,d:2.35,yaw:0.35}},
-  {id:'bottom',name:'Onderkant',   icon:['########','########','###..###','###..###','###..###','###..###','###..###','###..###'], cam:{y:0.42,d:2.15,yaw:0.35}},
+  {id:'top',   name:'Bovenkant',   icon:['##....##','########','########','########','..####..','..####..','..####..','..####..'], cam:{y:1.28,d:2.2,yaw:0.35}},
+  {id:'bottom',name:'Onderkant',   icon:['########','########','###..###','###..###','###..###','###..###','###..###','###..###'], cam:{y:0.55,d:2.4,yaw:0.35}},
   {id:'shoes', name:'Schoenen',    icon:['........','........','###.....','###.....','######..','########','########','........'], cam:{y:0.18,d:1.35,yaw:0.6}},
   {id:'acc',   name:'Accessoires', icon:['........','........','###..###','########','###..###','###..###','........','........'], cam:{y:1.4,d:2.1,yaw:0.4}, multi:true},
   {id:'held',  name:'Spullen',     icon:['..####..','..#..#..','########','########','########','###..###','########','########'], cam:{y:0.85,d:1.9,yaw:-0.5,hand:true}},
@@ -558,7 +556,8 @@ const REACT = {
     return { head:[-0.5*o,0,0], lArm:[0.15*o, 0.55*o], rArm:[0.15*o, 0.55*o], chest:[0.05*o, 0.3*Math.sin((t-.25)*7.5)*tw, 0] }; }},
   // small squat, look down, alternate kicks
   bottom:{T:1.6, f:t=>{ const o=bump(t,0,.2,1.15,1.55);
-    return { head:[-0.6*o,0,0], sq:0.06*bump(t,0,.12,.25,.45), lLeg:[0.45*bump(t,.3,.42,.48,.62),0], rLeg:[0.45*bump(t,.62,.74,.8,.95),0], lArm:[0,0.25*o], rArm:[0,0.25*o], chest:[0.08*o,0,0] }; }},
+    const sqt = bump(t,0,.12,.25,.45);
+    return { head:[-0.6*o,0,0], sq:0.02*sqt, lKnee:[0.8*sqt + 0.5*bump(t,.3,.42,.48,.62)], rKnee:[0.8*sqt + 0.5*bump(t,.62,.74,.8,.95)], lLeg:[0.45*bump(t,.3,.42,.48,.62) + 0.4*sqt,0], rLeg:[0.45*bump(t,.62,.74,.8,.95) + 0.4*sqt,0], lArm:[0,0.25*o], rArm:[0,0.25*o], chest:[0.08*o,0,0] }; }},
   // lift a foot, tap the toe, admire
   shoes:{T:1.7, f:t=>{ const o=bump(t,0,.25,1.2,1.6), lift=bump(t,.1,.3,1.05,1.3);
     return { head:[-0.72*o,-0.15*o,0], chest:[0.1*o,-0.12*o,0], rLeg:[0.35*lift + 0.16*Math.abs(Math.sin((t-.3)*13))*bump(t,.3,.4,.95,1.05), 0.08*lift], lArm:[0,0.3*o], rArm:[0,0.22*o] }; }},
@@ -630,6 +629,10 @@ const REACT = {
   // back on his feet after being dangled: woozy head circles
   dizzy:{T:2.0, f:t=>{ const o=bump(t,0,.15,1.4,1.95);
     return { head:[0.14*Math.sin(t*8)*o, 0.28*Math.cos(t*8)*o, 0.22*Math.sin(t*8)*o], chest:[0.05*Math.sin(t*5)*o, 0, 0.08*Math.cos(t*5)*o], lArm:[0,0.28*o], rArm:[0,0.28*o] }; }},
+  // dropped straight and stuck the landing: squash, arms out for balance, settle
+  stick:{T:0.95, f:t=>{ const o=bump(t,0,.05,.35,.8), b=bump(t,.08,.2,.4,.75);
+    const cr = bump(t,0,.06,.2,.6);
+    return { sq:0.07*bump(t,0,.04,.1,.38), lArm:[0.25*b, 0.75*o], rArm:[0.25*b, 0.75*o], head:[-0.22*bump(t,0,.06,.15,.45), 0, 0], chest:[0.22*cr,0,0], lLeg:[0.4*cr,0], rLeg:[0.4*cr,0], lKnee:[0.8*cr], rKnee:[0.8*cr] }; }},
   // poked / clicked
   poke:{T:0.9, f:t=>{ const o=bump(t,0,.06,.25,.8);
     return { chest:[-0.14*o,0,0], head:[0.16*o,0,0.12*o], lArm:[0,0.32*o], rArm:[0,0.32*o], sq:0.05*bump(t,0,.05,.1,.3) }; }},
@@ -686,6 +689,7 @@ def({id:'afro', cat:'hair', name:'Krullen', variants:[
 
 /* ---- HEADWEAR ---- */
 def({id:'hat-none', cat:'hat', name:'Geen', none:true});
+def({id:'tcap', cat:'hat', name:'Pet', variants:[{n:'Red',c:0xd32a2c},{n:'Navy',c:0x1d2f63},{n:'Black',c:0x1d1e22},{n:'White',c:0xf1f1f1},{n:'Green',c:0x3f9b3a},{n:'Yellow',c:0xf2c12e}]});
 def({id:'cap', cat:'hat', name:'Pet', variants:[
     {n:'Red',c:0xd9262e,l:0xffffff},{n:'Navy',c:0x1d2f63,l:0xffffff},{n:'Black',c:0x18181c,l:0xffd335},{n:'White',c:0xf3f3f3,l:0xd9262e}],
   build:v=>({anchor:'head', boxes:[
@@ -851,13 +855,125 @@ def({id:'bat', cat:'held', name:'Knuppel', qty:1, variants:[{n:'Maple',c:0xc98a4
   build:v=>{ const c=v.c, g=0x1d1d22; return {anchor:'rhand', offset:[0,1,0.4], rotX:-0.45, boxes:[
     [-0.9,-0.9,-2.4,0.9,0.9,-1.5,g],[-0.55,-0.55,-1.5,0.55,0.55,5,g],[-0.6,-0.6,5,0.6,0.6,7,c],[-0.8,-0.8,7,0.8,0.8,10,c],[-1.0,-1.0,10,1.0,1.0,16.5,c]]}; }});
 
+// built for Steve's square block head / torso: hidden until there are versions for the template
+for (const it of ITEMS) if (it.cat==='hair' || it.cat==='acc' || (it.cat==='hat' && it.build)) it.hidden = true;
+for (const c of CATS) if (c.id==='hair' || c.id==='acc') c.hidden = true;
 const ITEM = Object.fromEntries(ITEMS.map(i=>[i.id,i]));
 const swatchOf = (item,v) => { const vals=Object.entries(v).filter(([k,x])=>k!=='n'&&typeof x==='number').map(([,x])=>x); return vals.slice(0,2); };
 
 /* ============================================================
+   TEMPLATE CHARACTER — rigged in code from the segmented OBJ.
+   Same bone names as the old block rig (World_Bone > Chest > Head / arms / legs) plus elbows,
+   so idle retargeting, ragdoll, reactions and walking all keep working. Every part is bound
+   100% to one bone (rigid, like an action figure). Units: 2 = top of the cap, faces +Z, his left = +X.
+   ============================================================ */
+const TPL_BONES = ['World_Bone','Chest','Head','Left_Arm','Right_Arm','Left_Elbow','Right_Elbow','Left_Leg','Right_Leg','Left_Knee','Right_Knee'];
+function buildTemplate(obj){
+  const src = {}; obj.traverse(o=>{ if (o.isMesh) src[o.name.toLowerCase()] = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry; });
+  const part = key => { const k = Object.keys(src).find(n=>n.includes(key)); if (!k) throw new Error('template part missing: '+key); return src[k]; };
+  const all = new THREE.Box3(); for (const g of Object.values(src)){ g.computeBoundingBox(); all.union(g.boundingBox); }
+  const torso0 = part('torso'); torso0.computeBoundingBox();
+  const S = 2/(all.max.y-all.min.y), y0 = all.min.y, zc = (torso0.boundingBox.min.z+torso0.boundingBox.max.z)/2;
+  // copy (one side of) a part into char space: side +1 = his left (+X), -1 = right, 0 = everything
+  const cut = (g, side=0) => {
+    const p = g.attributes.position, n = g.attributes.normal, P = [], N = [];
+    for (let t=0; t<p.count; t+=3){
+      const cx = p.getX(t)+p.getX(t+1)+p.getX(t+2);
+      if (side && Math.sign(cx)!==side) continue;
+      for (let k=0;k<3;k++){ const i=t+k; P.push(p.getX(i)*S, (p.getY(i)-y0)*S, (p.getZ(i)-zc)*S); if (n) N.push(n.getX(i), n.getY(i), n.getZ(i)); }
+    }
+    const o = new THREE.BufferGeometry(); o.setAttribute('position', new THREE.Float32BufferAttribute(P,3));
+    if (n) o.setAttribute('normal', new THREE.Float32BufferAttribute(N,3)); else o.computeVertexNormals();
+    o.computeBoundingBox(); return o;
+  };
+  const merge = gs => { const m = mergeGeometries(gs); m.computeBoundingBox(); return m; };
+  // keep the triangles above (or below) a height, plus a small overlap band
+  const splitY = (g, y, above, ov=0.035) => {
+    const p = g.attributes.position, n = g.attributes.normal, Pp = [], Nn = [];
+    for (let t=0; t<p.count; t+=3){
+      const cy = (p.getY(t)+p.getY(t+1)+p.getY(t+2))/3;
+      if (above ? cy < y-ov : cy > y+ov) continue;
+      for (let k=0;k<3;k++){ Pp.push(p.getX(t+k), p.getY(t+k), p.getZ(t+k)); Nn.push(n.getX(t+k), n.getY(t+k), n.getZ(t+k)); }
+    }
+    const o = new THREE.BufferGeometry(); o.setAttribute('position', new THREE.Float32BufferAttribute(Pp,3)); o.setAttribute('normal', new THREE.Float32BufferAttribute(Nn,3)); o.computeBoundingBox(); return o;
+  };
+  const bb = g => g.boundingBox, mid = (a,b) => (a+b)/2;
+  // centre of the vertices near the top of a piece (legs flare out, so the bbox centre isn't the hip)
+  const topCentre = (g, band) => { const p=g.attributes.position, top=bb(g).max.y, c=new THREE.Vector3(); let n=0;
+    for (let i=0;i<p.count;i++) if (p.getY(i) > top-band){ c.x+=p.getX(i); c.z+=p.getZ(i); n++; } return c.divideScalar(Math.max(1,n)); };
+
+  const head = merge([cut(part('head')), cut(part('neck'))]), cap = cut(part('hat')), torso = cut(torso0);
+  const side = s => ({ ua:cut(part('upperarm'),s), fa:merge([cut(part('forearm'),s), cut(part('fist'),s)]), fist:cut(part('fist'),s), leg:cut(part('legs'),s), shoe:cut(part('choes'),s) });
+  const L = side(1), R = side(-1);
+  // joint pivots (char space)
+  const neckB = bb(cut(part('neck'))), tb = bb(torso);
+  const P = {
+    World_Bone: new THREE.Vector3(0,0,0),
+    Chest:      new THREE.Vector3(0, tb.min.y + 0.05*(tb.max.y-tb.min.y), 0),
+    Head:       new THREE.Vector3(0, neckB.min.y + 0.3*(neckB.max.y-neckB.min.y), mid(neckB.min.z, neckB.max.z)),
+  };
+  for (const [nm, d] of [['Left',L],['Right',R]]){
+    const ua = bb(d.ua), fa = bb(d.fa), lt = topCentre(d.leg, 0.12), lg = bb(d.leg);
+    P[nm+'_Arm']   = new THREE.Vector3(mid(ua.min.x,ua.max.x), ua.max.y - 0.18*(ua.max.y-ua.min.y), mid(ua.min.z,ua.max.z));
+    P[nm+'_Elbow'] = new THREE.Vector3(mid(fa.min.x,fa.max.x), (ua.min.y + bb(cut(part('forearm'), nm==='Left'?1:-1)).max.y)/2, mid(fa.min.z,fa.max.z));
+    P[nm+'_Leg']   = new THREE.Vector3(lt.x, lg.max.y - 0.06*(lg.max.y-lg.min.y), lt.z);
+    const ky = bb(d.shoe).max.y + 0.45*(P[nm+'_Leg'].y - bb(d.shoe).max.y), kc = new THREE.Vector3(); let kn = 0;
+    { const p = d.leg.attributes.position; for (let i=0;i<p.count;i++) if (Math.abs(p.getY(i)-ky) < 0.06){ kc.x+=p.getX(i); kc.z+=p.getZ(i); kn++; } }
+    kc.divideScalar(Math.max(1,kn)); P[nm+'_Knee'] = new THREE.Vector3(kn ? kc.x : lt.x, ky, kn ? kc.z : lt.z);
+  }
+  const parentOf = { Chest:'World_Bone', Head:'Chest', Left_Arm:'Chest', Right_Arm:'Chest', Left_Elbow:'Left_Arm', Right_Elbow:'Right_Arm', Left_Leg:'Chest', Right_Leg:'Chest', Left_Knee:'Left_Leg', Right_Knee:'Right_Leg' };
+  const bones = {}; for (const n of TPL_BONES){ const b = new THREE.Bone(); b.name = n; bones[n] = b; }
+  for (const n of TPL_BONES){ const b = bones[n], pn = parentOf[n]; b.position.copy(P[n]); if (pn){ b.position.sub(P[pn]); bones[pn].add(b); } }
+  const root = new THREE.Group(); root.name = 'Template'; root.add(bones.World_Bone); root.updateMatrixWorld(true);
+  const skel = new THREE.Skeleton(TPL_BONES.map(n=>bones[n]));
+  // name = what the pick code calls it, part = which colour it takes
+  const pieces = [
+    ['head','skin',head,'Head'], ['headwear','cap',cap,'Head'], ['body','top',torso,'Chest'],
+    ['left_sleve','sleeve',L.ua,'Left_Arm'],   ['right_sleve','sleeve',R.ua,'Right_Arm'],
+    ['left_arm','skin',L.fa,'Left_Elbow'],  ['right_arm','skin',R.fa,'Right_Elbow'],
+    // knees work like the elbows: the denim is cut at the knee into a rigid thigh and shin piece;
+    // the pieces overlap a little so the seam stays closed when the knee bends
+    ['left_pants','bottom',splitY(L.leg, P.Left_Knee.y, true),'Left_Leg'],  ['right_pants','bottom',splitY(R.leg, P.Right_Knee.y, true),'Right_Leg'],
+    ['left_pants','bottom',splitY(L.leg, P.Left_Knee.y, false),'Left_Knee'], ['right_pants','bottom',splitY(R.leg, P.Right_Knee.y, false),'Right_Knee'],
+    ['left_leg','shoes',L.shoe,'Left_Knee'], ['right_leg','shoes',R.shoe,'Right_Knee'],
+  ];
+  for (const [name, colourPart, g, bone, bone2] of pieces){
+    const n = g.attributes.position.count, bi = TPL_BONES.indexOf(bone), pos = g.attributes.position;
+    const SI = new Uint16Array(n*4), SW = new Float32Array(n*4);
+    for (let i=0;i<n;i++){
+      SI[i*4] = bi; SW[i*4] = 1;
+      if (bone2){   // soft knee: weight slides from thigh to shin over a band around the knee, so the denim bends instead of splitting
+        const ky = P[bone2].y, w = smooth(ky+0.07, ky-0.07, pos.getY(i));
+        SI[i*4+1] = TPL_BONES.indexOf(bone2); SW[i*4] = 1-w; SW[i*4+1] = w;
+      }
+    }
+    g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(SI, 4));
+    g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(SW, 4));
+    const m = new THREE.SkinnedMesh(g, new THREE.MeshStandardMaterial()); m.name = name; m.userData.part = colourPart;
+    root.add(m); m.bind(skel);
+  }
+  const fistC = g => { const b = bb(g); return [mid(b.min.x,b.max.x), mid(b.min.y,b.max.y), mid(b.min.z,b.max.z), b.min.y]; };
+  const feet = g => { const b = bb(g); return [b.min.x, b.max.x, b.min.z, b.max.z]; };
+  root.userData.tpl = { fistL:fistC(L.fist), fistR:fistC(R.fist), feetL:feet(L.shoe), feetR:feet(R.shoe), headTop:bb(head).max.y,
+    torso:[tb.min.x, tb.max.x, tb.min.y, tb.max.y, tb.min.z, tb.max.z], headR:0.5*(bb(head).max.x-bb(head).min.x) };
+  return root;
+}
+// colour-block outfit: top / bottom / shoes / cap colours come from the chosen item's colour; skin from the tone
+const TPL_COL = { top:0xcf2f2f, sleeve:0xebebeb, bottom:0x3e6fb6, shoes:0xf2f2f2 };
+function tintParts(rig, o){
+  if (!rig.partMats) return;
+  const vc = slot => { const it = ITEM[o[slot]]; return it && it.variants ? (it.variants[variantOf(o,it.id)] || it.variants[0]).c : TPL_COL[slot]; };
+  const top = ITEM[o.top], cols = { skin:TONES()[body.tone], top:vc('top'), sleeve:top && top.variants ? vc('top') : TPL_COL.sleeve, bottom:vc('bottom'), shoes:vc('shoes'), cap:o.hat==='tcap' ? vc('hat') : -1 };
+  rig.glowParts = new Set(rig.partCols ? Object.keys(cols).filter(k=>cols[k]!==rig.partCols[k]) : []);
+  rig.partCols = cols;
+  for (const [k,m] of Object.entries(rig.partMats)) if (cols[k] >= 0) m.color.setHex(cols[k]);
+  for (const m of rig.capMeshes) m.visible = cols.cap >= 0;
+}
+
+/* ============================================================
    RIG  (wraps a loaded / cloned Steve)
    ============================================================ */
-const BONES = ['World_Bone','Chest','Head','Left_Arm','Right_Arm','Left_Leg','Right_Leg'];
+const BONES = ['World_Bone','Chest','Head','Left_Arm','Right_Arm','Left_Elbow','Right_Elbow','Left_Leg','Right_Leg','Left_Knee','Right_Knee'];
 function makeRig(modelRoot, holder, castShadow){
   const rig = { root:modelRoot, bones:{}, restChar:{}, restCharQ:{}, attached:{} };
   const cvs = document.createElement('canvas'); cvs.width=cvs.height=64;
@@ -870,24 +986,35 @@ function makeRig(modelRoot, holder, castShadow){
   rig.glowTex = new THREE.CanvasTexture(gc);
   Object.assign(rig.glowTex, {flipY:false, magFilter:THREE.NearestFilter, minFilter:THREE.NearestFilter, generateMipmaps:false});
   rig.mat = new THREE.MeshStandardMaterial({map:rig.tex, emissiveMap:rig.glowTex, alphaTest:0.5, roughness:0.88, metalness:0, side:THREE.FrontSide});
+  // template: one matte material per colour part (skin / top / bottom / shoes / cap)
+  rig.partMats = null; rig.capMeshes = [];
   modelRoot.traverse(o=>{
     if (o.isBone && BONES.includes(o.name)) rig.bones[o.name]=o;
-    if (o.isMesh){ o.material = rig.mat; o.castShadow = castShadow; o.receiveShadow = true; o.frustumCulled = false; }
+    if (o.isMesh){
+      const pk = o.userData.part;
+      if (pk){ rig.partMats = rig.partMats || {}; o.material = rig.partMats[pk] || (rig.partMats[pk] = new THREE.MeshStandardMaterial({ roughness:0.82, metalness:0, side:THREE.DoubleSide })); if (pk==='cap') rig.capMeshes.push(o); }
+      else o.material = rig.mat;
+      o.castShadow = castShadow; o.receiveShadow = true; o.frustumCulled = false;
+    }
   });
+  // (no fresnel rim on the template: on its smooth parts it reads as a halo)
   holder.updateMatrixWorld(true);
   const inv = new THREE.Matrix4().copy(holder.matrixWorld).invert();
   for (const [n,b] of Object.entries(rig.bones)){
     rig.restChar[n] = inv.clone().multiply(b.matrixWorld);
     rig.restCharQ[n] = new THREE.Quaternion().setFromRotationMatrix(rig.restChar[n]);
   }
-  const p = new THREE.Vector3().setFromMatrixPosition(rig.restChar.Right_Arm);
+  const p = new THREE.Vector3().setFromMatrixPosition(rig.restChar.Right_Arm), tpl = findTpl(modelRoot);
+  rig.tpl = tpl;
   rig.anchors = {
     head:  { bone:'Head',      pos:new THREE.Vector3(0,1.5,0) },
     chest: { bone:'Chest',     pos:new THREE.Vector3(0,0.75,0) },
-    rhand: { bone:'Right_Arm', pos:new THREE.Vector3(p.x,0.75,0) },
+    rhand: tpl ? { bone:'Right_Elbow', pos:new THREE.Vector3(tpl.fistR[0], tpl.fistR[3]+0.02, tpl.fistR[2]) }
+               : { bone:'Right_Arm', pos:new THREE.Vector3(p.x,0.75,0) },
   };
   return rig;
 }
+function findTpl(root){ let t = null; root.traverse(o=>{ if (!t && o.userData && o.userData.tpl) t = o.userData.tpl; }); return t; }
 function attachItem(rig, key, item, v, mat){
   const spec = item.build(v);
   const mesh = vox(spec.boxes, mat);
@@ -919,7 +1046,7 @@ const dying = [];
    OUTFIT  → texture composition + voxel attachments
    ============================================================ */
 let BASE = null;   // ImageData of the original skin
-const DEFAULT_OUTFIT = () => ({ hair:'hair-none', hat:'hat-none', top:'top-steve', bottom:'bot-steve', shoes:'shoe-steve', held:'held-none', acc:{} , v:{} });
+const DEFAULT_OUTFIT = () => ({ hair:'hair-none', hat:'tcap', top:'top-steve', bottom:'bot-steve', shoes:'shoe-steve', held:'held-none', acc:{} , v:{} });
 let outfit = DEFAULT_OUTFIT();
 const variantOf = (o,id) => (o.v[id] ?? 0);
 
@@ -936,6 +1063,7 @@ function composeInto(ctx, o, forBlink){
 let mainRig, mannequin, curImage;
 function refreshTexture(){
   const prev = curImage; curImage = composeInto(mainRig.ctx, outfit); mainRig.tex.needsUpdate = true;
+  tintParts(mainRig, outfit);
   // mark exactly the pixels that changed (new garment, skin tone, …) in the glow mask
   const m = mainRig.glowCtx.createImageData(64,64), a = prev && prev.data, b = curImage.data, d = m.data;
   for (let i=0;i<b.length;i+=4){
@@ -1079,15 +1207,23 @@ function applyRetarget(dt){
     if (k!==1) q.slerpQuaternions(IDQ, q.clone(), k);
     setCharQuat(B[tgt], q.multiply(RQ[tgt]));
   };
-  limb('Left_Arm','leftarm','lefthand'); limb('Right_Arm','rightarm','righthand');
+  if (B.Left_Elbow && R.src.leftforearm && R.src.rightforearm){   // upper arm → elbow, forearm → hand
+    limb('Left_Arm','leftarm','leftforearm'); limb('Right_Arm','rightarm','rightforearm');
+    limb('Left_Elbow','leftforearm','lefthand'); limb('Right_Elbow','rightforearm','righthand');
+  } else { limb('Left_Arm','leftarm','lefthand'); limb('Right_Arm','rightarm','righthand'); }
+  // legs stay straight in the idle (whole leg hip→foot, knee unbent) so both feet stand flat;
+  // knees only bend when something asks for it (walking, landing crouch, squat)
   limb('Left_Leg','leftupleg','leftfoot',0.9); limb('Right_Leg','rightupleg','rightfoot',0.9);
+  if (B.Left_Knee){ B.Left_Knee.quaternion.identity(); B.Right_Knee.quaternion.identity(); B.Left_Knee.updateMatrixWorld(true); B.Right_Knee.updateMatrixWorld(true); }
 }
 
 // keep the lowest foot corner on the floor (block legs have no knees to absorb hip motion)
 let footPts = [];
 function setupFeet(){
+  const tpl = mainRig.tpl;
   footPts = ['Left_Leg','Right_Leg'].map(n=>{
     const inv = mainRig.restChar[n].clone().invert();
+    if (tpl){ const kn = n.replace('Leg','Knee'), kinv = mainRig.restChar[kn].clone().invert(), [x0,x1,z0,z1] = n==='Left_Leg' ? tpl.feetL : tpl.feetR; return [mainRig.bones[kn], [[x0,z0],[x1,z0],[x0,z1],[x1,z1]].map(([x,z])=>new THREE.Vector3(x,0,z).applyMatrix4(kinv))]; }
     const x = new THREE.Vector3().setFromMatrixPosition(mainRig.restChar[n]).x;
     return [mainRig.bones[n], [[-.12,-.12],[.12,-.12],[-.12,.12],[.12,.12]].map(([dx,dz])=>new THREE.Vector3(x+dx,0,dz).applyMatrix4(inv))];
   });
@@ -1113,10 +1249,10 @@ let modelProto = null, idleFBX = null, builtinIdle = null, booting = true;
 async function init(){
   const saved = restore();
   const e0 = ENVS[clamp((saved && saved.env)|0, 0, ENVS.length-1)];
-  const [gltf, skinImg] = await Promise.all([
-    new GLTFLoader().loadAsync(MODEL_URL, e=>{ if(e.total) prog.g=e.loaded/e.total; showProg(); }),
+  const [tplObj, skinImg] = await Promise.all([
+    new OBJLoader().loadAsync(TPL_URL, e=>{ if(e.total) prog.g=e.loaded/e.total; showProg(); }),
     loadImage(SKIN_URL).then(i=>{prog.t=1;showProg();return i;}),
-    loadEnv(e0, e=>{ if(e.total) prog.f=e.loaded/e.total; showProg(); }),
+    loadEnv(e0).then(e=>{ prog.f=1; showProg(); return e; }),
   ]);
   showEnv(ENVS.indexOf(e0));
   prog.g = 1; showProg();
@@ -1129,12 +1265,10 @@ async function init(){
   SKIN0 = SKIN.slice(); BASE_ORIG = new ImageData(new Uint8ClampedArray(BASE.data),64,64);
 
   // model: make sure the face looks down +Z in "char space"; every character is a clone of this one
-  const model = new THREE.Group(); model.add(gltf.scene);
-  model.updateMatrixWorld(true);
-  if (frontSign(gltf.scene) < 0) gltf.scene.rotation.y += Math.PI;
+  const model = new THREE.Group(); model.add(buildTemplate(tplObj));
   model.updateMatrixWorld(true);
   modelProto = model;
-  builtinIdle = gltf.animations.find(a=>/idle/i.test(a.name)) || null;
+  builtinIdle = null;
 
   // thumbnail mannequin (independent clone)
   const clone = SkeletonUtils.clone(model); thumbScene.add(clone);
@@ -1144,7 +1278,7 @@ async function init(){
   const list = (saved && saved.chars && saved.chars.length) ? saved.chars.slice(0, MAX_CHARS) : [{}];
   list.forEach((d,i)=>chars.push(newChar(d, i)));
   active = chars[0]; useChar(active);
-  buildBodyUI(); buildShotBar(); buildTabs(); selectCat(CATS[0].id); camReady = true;
+  buildBodyUI(); buildShotBar(); buildTabs(); selectCat(CATS.find(c=>!c.hidden).id); camReady = true;
   booting = false; syncCharUI(); fitShadow(); save();
   layout();
   window.__cc = { get mainRig(){ return active.mainRig; }, get retarget(){ stashChar(); return active.retarget; }, camera, get turntable(){ return active.turntable; },
@@ -1192,7 +1326,7 @@ const yawFor = p => Math.atan2(-p.x, -p.z);    // face the camera
 function newChar(d={}, slotI=0){
   const h = makeHolder(), at = SLOTS[slotI];
   const c = { ...h, slotI, slot:at.clone(), place:{ pos:at.clone(), yaw:yawFor(at) }, mv:null, tilt:0, lift:0, pose:null, appear:1, popped:true,
-    mainRig:null, RAG:newRag(), outfit:sanitizeOutfit(d.outfit), body:Object.assign({tone:3,height:50,build:50,size:50}, d.body||{}),
+    mainRig:null, RAG:newRag(), outfit:sanitizeOutfit(d.outfit), body:Object.assign({tone:1,height:50,build:50,size:50}, d.body||{}),
     retarget:null, gltfMixer:null, footPts:[], look:{ w:0, target:0, until:0, next:rand(1.5,6), cooldown:0, yaw:0, pitch:0 }, reactS:{ t:99, key:null, amp:1 },
     glow:0, holdW:0, blink:{ next:rand(1,4), until:0, on:false }, spin:{ angle:0, target:0, vel:0, drag:false, lastX:0, lastT:0 },
     hist:{ stack:[], i:-1 }, savedState:d.saved||null, BASE:null, SKIN:SKIN0.slice(), SKIN_D:shadeRGB(SKIN0,0.85), appliedTone:-1, curImage:null, name:d.name||'' };
@@ -1212,6 +1346,7 @@ function disposeChar(c){
   scene.remove(c.turntable); scene.remove(c.blob);
   c.turntable.traverse(o=>{ if (o.isMesh && o.userData && !o.isSkinnedMesh) o.geometry.dispose(); });
   c.mainRig.tex.dispose(); c.mainRig.glowTex.dispose(); c.mainRig.mat.dispose(); c.blob.material.dispose();
+  if (c.mainRig.partMats) for (const m of Object.values(c.mainRig.partMats)) m.dispose();
 }
 function setSlot(c, i){
   c.slotI = i; c.slot.copy(SLOTS[i]);
@@ -1317,7 +1452,8 @@ function moveChar(dt){
   }
   if (!moving){ P.pos.lerp(_v2.copy(c.slot).setY(0), 1-Math.exp(-14*dt)); if (Math.abs(err) < 0.004 && m.w < 0.02 && dist < 0.003){ P.pos.copy(c.slot); P.yaw = want; c.mv = null; } }
   const sw = Math.sin(m.ph)*m.w;
-  c.pose = { lLeg:[0.6*sw,0], rLeg:[-0.6*sw,0], lArm:[-0.5*sw,0], rArm:[0.5*sw,0] };
+  const ks = Math.cos(m.ph)*m.w;
+  c.pose = { lLeg:[0.6*sw,0], rLeg:[-0.6*sw,0], lArm:[-0.5*sw,0], rArm:[0.5*sw,0], lKnee:[(0.12 + 0.75*Math.max(0, ks))*m.w], rKnee:[(0.12 + 0.75*Math.max(0, -ks))*m.w] };
   c.lift = 0.04*Math.abs(Math.cos(m.ph))*m.w;
 }
 /* ---- ZERO GRAVITY: everyone lifts off and drifts; switching it off drops them (and they get back up) ---- */
@@ -1342,6 +1478,7 @@ const SAY = {
   idle:   ['Ja jonge','Gast..','Wollah','Echt wel','Sws','Ewa','Mattie!','Skeer..','Ik zweer het','Bro wat','Doe normaal','Is goed','Niet normaal','Bizar','Chill','Fakka?','Hoezo?','Serieus?','Zo vet','Lekker bezig','Ik verveel me','Wanneer is de pauze?','Wie heeft mijn pen?','Bro…','Kapot vet','Nee man','Kan niet','Effe chillen','Ik heb honger','Na school gamen?','Ik ben moe man'],
   dressed:['Drip!','Fresh hoor','Kijk mij nou','Ziet er goed uit toch','Swag','Kapot mooi','Hoe zie ik eruit?','Ja jonge, dit is hem','Zo moet het','Nieuwe fit'],
   dangle: ['Zet me neer!','Gast!!','Help!','Wollah laat los!','Neeee!','Hé, doe normaal!','Ik word misselijk','AAAH','Mama!','Niet laten vallen!'],
+  stuck:  ['Tadaa!','Geland!','Tien punten','Als een kat','Easy','Ja jonge!','Perfect','Hup!'],
   land:   ['Au..','Ik ben oké','Niet chill','Gast, waarom?','Mijn rug..','Dat deed pijn','Oké oké','Wat was dat?'],
   float:  ['Ik vlieg!','Woooo','Waar is boven?','Gast ik zweef','Dit is ziek','Astronaut nu','Zwaartekracht? Nooit van gehoord'],
   laugh:  ['Hahaha','Haha gast','HAHAHA wollah','Ik lig dubbel','Hahaha nee man'],
@@ -1498,7 +1635,7 @@ function renderThumb(item, vi){
     if (item.cat==='acc') o.acc[item.id]=vi; else o[item.cat]=item.id;
     o.v[item.id]=vi;
   }
-  composeInto(mannequin.ctx, o); mannequin.tex.needsUpdate = true;
+  composeInto(mannequin.ctx, o); mannequin.tex.needsUpdate = true; tintParts(mannequin, o);
   syncVoxels(mannequin, o, voxMatThumb, false);
   const cat = CATS.find(c=>c.id===item.cat);
   let cam = {...cat.cam};
@@ -1535,6 +1672,7 @@ let curCat = null, camReady = false; const lastPick = {};   // which item's colo
 function buildTabs(){
   const t = $('#tabs'); t.innerHTML='';
   for (const c of CATS){
+    if (c.hidden) continue;
     const b = document.createElement('button'); b.className='tab'; b.dataset.cat=c.id; b.title=c.name; b.setAttribute('role','tab'); b.setAttribute('aria-label',c.name);
     b.innerHTML = pixIcon(c.icon); b.onclick = ()=>selectCat(c.id); t.appendChild(b);
   }
@@ -1549,7 +1687,7 @@ function selectCat(id){
   if (changed && camS.auto && camReady) goShot(CAT_SHOT[id]||'totaal');
   document.querySelectorAll('.tab').forEach(b=>{ b.classList.toggle('on', b.dataset.cat===id); b.setAttribute('aria-selected', b.dataset.cat===id); });
   $('#catTitle').textContent = cat.name;
-  const list = ITEMS.filter(i=>i.cat===id);
+  const list = ITEMS.filter(i=>i.cat===id && !i.hidden);
   $('#catCount').textContent = list.length + ' items';
   const grid = $('#grid'); grid.innerHTML=''; grid.scrollTop = 0;
   const jobs = [];
@@ -1591,7 +1729,7 @@ function equip(item, vi, fromSwatch){
   }
   outfit.v[item.id] = vi;
   const wasOn = item.cat==='acc' ? (item.id in outfit.acc) : true;
-  if (item.paint || item.original || ['top','bottom','shoes'].includes(item.cat)){
+  if (item.paint || item.original || ['top','bottom','shoes','hat'].includes(item.cat)){
     refreshTexture(); glow = 1;
     const p = SLOT_POINT[item.cat]; if (p) spawnAt(bounce.localToWorld(new THREE.Vector3(...p)), [0xffffff,0xffd335,...(item.variants?swatchOf(item,item.variants[vi]):[])], 14);
   }
@@ -1604,8 +1742,8 @@ function equip(item, vi, fromSwatch){
 
 /* ---- body: skin tone, height, build ---- */
 let BASE_ORIG = null, SKIN0 = null;
-let body = { tone:3, height:50, build:50, size:50 };
-const TONES = () => [0xf3d8c0, 0xe6b994, 0xcf9a6c, (SKIN0[0]<<16)|(SKIN0[1]<<8)|SKIN0[2], 0x8a5634, 0x58361f];
+let body = { tone:1, height:50, build:50, size:50 };
+const TONES = () => [0xf3d8c0, 0xefc39d, 0xcf9a6c, (SKIN0[0]<<16)|(SKIN0[1]<<8)|SKIN0[2], 0x8a5634, 0x58361f];
 let appliedTone = -1;
 function recolorSkin(toneHex){
   const d = new Uint8ClampedArray(BASE_ORIG.data); const t = rgb(toneHex);
@@ -1664,7 +1802,8 @@ $('#redo').onclick = ()=>{ if (hist.i<hist.stack.length-1){ hist.i++; applyState
 function randomOutfit(){
   const o = DEFAULT_OUTFIT();
   for (const c of CATS){
-    const list = ITEMS.filter(i=>i.cat===c.id && i.variants);
+    if (c.hidden) continue;
+    const list = ITEMS.filter(i=>i.cat===c.id && i.variants && !i.hidden);
     if (c.multi){ for (const it of list) if (Math.random()<0.35){ const vi=Math.floor(Math.random()*it.variants.length); o.acc[it.id]=vi; o.v[it.id]=vi; } continue; }
     if (Math.random() < (c.id==='hat'||c.id==='held'?0.45:0.15)) continue;
     const it = list[Math.floor(Math.random()*list.length)]; const vi=Math.floor(Math.random()*it.variants.length);
@@ -1681,7 +1820,7 @@ $('#dice').onclick = ()=>{
   spawnAt(bounce.localToWorld(new THREE.Vector3(0,1.1,0.2)), [0xffffff,0xffd335,0x2f7cf6,0xff5c7a], 26, 1.4);
   selectCat(curCat); commit();
 };
-$('#reset').onclick = ()=>{ outfit = DEFAULT_OUTFIT(); body = {tone:3,height:50,build:50,size:50}; applyBody(); syncBodyUI(); refreshTexture(); syncVoxels(mainRig,outfit,voxMat,true); react('off',1); selectCat(curCat); commit(); };
+$('#reset').onclick = ()=>{ outfit = DEFAULT_OUTFIT(); body = {tone:1,height:50,build:50,size:50}; applyBody(); syncBodyUI(); refreshTexture(); syncVoxels(mainRig,outfit,voxMat,true); react('off',1); selectCat(curCat); commit(); };
 $('#rotL').onclick = ()=> spin.target -= Math.PI/4;
 $('#rotR').onclick = ()=> spin.target += Math.PI/4;
 $('#cancel').onclick = ()=>{ if (savedState && savedState!==snap()){ applyState(savedState); commit(); toast('Teruggezet'); } else react('off',0.8); };
@@ -1727,9 +1866,9 @@ function save(){
 }
 function sanitizeOutfit(src){
   const o = Object.assign(DEFAULT_OUTFIT(), src ? JSON.parse(JSON.stringify(src)) : {});
-  for (const k of ['hair','hat','top','bottom','shoes','held']) if (!ITEM[o[k]]) o[k]=DEFAULT_OUTFIT()[k];
+  for (const k of ['hair','hat','top','bottom','shoes','held']) if (!ITEM[o[k]] || ITEM[o[k]].hidden) o[k]=DEFAULT_OUTFIT()[k];
   o.acc = o.acc || {}; o.v = o.v || {};
-  for (const id of Object.keys(o.acc)) if (!ITEM[id]) delete o.acc[id];
+  for (const id of Object.keys(o.acc)) if (!ITEM[id] || ITEM[id].hidden) delete o.acc[id];
   return o;
 }
 function restore(){
@@ -1814,16 +1953,19 @@ document.addEventListener('pointerleave', ()=>{ mouse.inside=false; });
    falls when released, then gets back up.
    ============================================================ */
 let RAG = { state:'off', t:0, P:null, C:[], pin:null, target:new THREE.Vector3(), aim:new THREE.Vector3(), plane:new THREE.Plane(), still:0, acc:0, saved:null };
-const RAG_R = { sL:0.13, sR:0.13, hL:0.13, hR:0.13, top:0.22, handL:0.11, handR:0.11, footL:0.11, footR:0.11 };
-const GRAB_SET = { head:['top'], torso:['sL','sR','hL','hR'], lArm:['handL','sL'], rArm:['handR','sR'], lLeg:['footL','hL'], rLeg:['footR','hR'] };
+const RAG_R = { sL:0.13, sR:0.13, hL:0.13, hR:0.13, top:0.22, handL:0.11, handR:0.11, footL:0.11, footR:0.11, elbL:0.08, elbR:0.08, kneL:0.11, kneR:0.11 };
+const GRAB_SET = { head:['top'], torso:['sL','sR','hL','hR'], lArm:['handL','elbL','sL'], rArm:['handR','elbR','sR'], lLeg:['footL','kneL','hL'], rLeg:['footR','kneR','hR'] };
 function ragSetup(){
   const pv = n => new THREE.Vector3().setFromMatrixPosition(mainRig.restChar[n]);
   const la=pv('Left_Arm'), ra=pv('Right_Arm'), ll=pv('Left_Leg'), rl=pv('Right_Leg');
   RAG.defs = [
     ['sL','Chest',la], ['sR','Chest',ra], ['hL','Chest',ll], ['hR','Chest',rl],
-    ['top','Head',new THREE.Vector3(0,2.0,0)],
-    ['handL','Left_Arm',new THREE.Vector3(la.x,0.8,0)], ['handR','Right_Arm',new THREE.Vector3(ra.x,0.8,0)],
-    ['footL','Left_Leg',new THREE.Vector3(ll.x,0.04,0)], ['footR','Right_Leg',new THREE.Vector3(rl.x,0.04,0)],
+    ['top','Head',new THREE.Vector3(0, mainRig.tpl ? mainRig.tpl.headTop : 2.0, 0)],
+    ...(mainRig.tpl ? [['handL','Left_Elbow',new THREE.Vector3(...mainRig.tpl.fistL.slice(0,3))], ['handR','Right_Elbow',new THREE.Vector3(...mainRig.tpl.fistR.slice(0,3))]]
+                    : [['handL','Left_Arm',new THREE.Vector3(la.x,0.8,0)], ['handR','Right_Arm',new THREE.Vector3(ra.x,0.8,0)]]),
+    ['footL',mainRig.bones.Left_Knee?'Left_Knee':'Left_Leg',new THREE.Vector3(ll.x,0.04,0)], ['footR',mainRig.bones.Right_Knee?'Right_Knee':'Right_Leg',new THREE.Vector3(rl.x,0.04,0)],
+    ...(mainRig.bones.Left_Elbow ? [['elbL','Left_Elbow',pv('Left_Elbow')], ['elbR','Right_Elbow',pv('Right_Elbow')]] : []),
+    ...(mainRig.bones.Left_Knee ? [['kneL','Left_Knee',pv('Left_Knee')], ['kneR','Right_Knee',pv('Right_Knee')]] : []),
   ].map(([n,b,c])=>({ n, b, c, local:c.clone().applyMatrix4(mainRig.restChar[b].clone().invert()) }));
   RAG.restC = Object.fromEntries(RAG.defs.map(d=>[d.n,d.c]));
   RAG.chest0 = pv('Chest'); RAG.g0 = la.clone().add(ra).add(ll).add(rl).multiplyScalar(0.25);
@@ -1831,7 +1973,7 @@ function ragSetup(){
 function ragInit(){
   const ms = mainRig.root.scale, S = CHAR_SCALE;
   const Wp = p => p.clone().multiply(ms).multiplyScalar(S);
-  RAG.P = {};
+  RAG.P = {}; RAG.tw = {};
   for (const d of RAG.defs){ const wp = d.local.clone().applyMatrix4(mainRig.bones[d.b].matrixWorld); RAG.P[d.n] = { pos:wp, prev:wp.clone(), r:RAG_R[d.n]*S, pinned:false }; }
   // start clear of the floor / desk: a first-step push-out would turn into a big Verlet kick
   let lift = 0; for (const p of Object.values(RAG.P)) lift = Math.max(lift, groundAt(p.pos.x, p.pos.z) + p.r - p.pos.y);
@@ -1839,10 +1981,38 @@ function ragInit(){
   const C=[]; const L=(a,b,lo=1,hi=1)=>{ const d=Wp(RAG.restC[a]).distanceTo(Wp(RAG.restC[b])); C.push({a,b,lo:d*lo,hi:d*hi}); };
   const T=['sL','sR','hL','hR']; for(let i=0;i<4;i++) for(let j=i+1;j<4;j++) L(T[i],T[j]);
   L('top','sL'); L('top','sR'); L('top','hL',0.95,1.01); L('top','hR',0.95,1.01);
-  L('handL','sL'); L('handR','sR'); L('footL','hL'); L('footR','hR');
   const M=(a,b,m)=>C.push({a,b,lo:m*S,hi:Infinity});
-  M('handL','sR',0.6); M('handR','sL',0.6); M('handL','hR',0.35); M('handR','hL',0.35);
-  M('footL','sL',0.6); M('footR','sR',0.6); M('footL','footR',0.16); M('footL','hR',0.2); M('footR','hL',0.2);
+  RAG.J = null;
+  if (RAG.restC.elbL && RAG.restC.kneL && mainRig.tpl){
+    // shoulder → elbow → hand, hip → knee → foot
+    for (const [a,b,c] of [['sL','elbL','handL'],['sR','elbR','handR'],['hL','kneL','footL'],['hR','kneR','footR']]) { L(a,b); L(b,c); }
+    // how far a joint can fold: minimum root-to-end distance (law of cosines on the inside angle)
+    const fold = (a,b,c,insideDeg) => { const A=Wp(RAG.restC[a]).distanceTo(Wp(RAG.restC[b])), B=Wp(RAG.restC[b]).distanceTo(Wp(RAG.restC[c])), th=insideDeg*Math.PI/180;
+      C.push({ a, b:c, lo:Math.sqrt(A*A+B*B-2*A*B*Math.cos(th)), hi:Infinity }); };
+    fold('sL','elbL','handL',32); fold('sR','elbR','handR',32); fold('hL','kneL','footL',30); fold('hR','kneR','footR',30);
+    M('footL','footR',0.16);
+    // body sizes (world units) for self-collision
+    const k = S*(ms.x+ms.y+ms.z)/3, tq = mainRig.tpl.torso, rc = RAG.restC;
+    const pc = rc.sL.clone().add(rc.sR).add(rc.hL).add(rc.hR).multiplyScalar(0.25);
+    RAG.J = {
+      hx:(tq[1]-tq[0])/2*S*ms.x, hy:(tq[3]-tq[2])/2*S*ms.y, hz:(tq[5]-tq[4])/2*S*ms.z,
+      oy:((tq[2]+tq[3])/2 - pc.y)*S*ms.y, oz:((tq[4]+tq[5])/2 - pc.z)*S*ms.z,
+      headR:mainRig.tpl.headR*k*0.95, armR:0.06*k, legR:0.1*k,
+      rs:{ elbL:0.055*k, elbR:0.055*k, handL:0.07*k, handR:0.07*k, kneL:0.09*k, kneR:0.09*k, footL:0.09*k, footR:0.09*k },
+      hinge:{},
+    };
+    // rest shape of each hinge in char space (left = +X): how bent / sideways the limb already is at rest
+    const X = new THREE.Vector3(1,0,0);
+    for (const [a,b,c,sign] of [['sL','elbL','handL',1],['sR','elbR','handR',1],['hL','kneL','footL',-1],['hR','kneR','footR',-1]]){
+      const u = rc[b].clone().sub(rc[a]).normalize(), ax = X.clone().addScaledVector(u, -X.dot(u)).normalize(), fr = new THREE.Vector3().crossVectors(u, ax);
+      const hv = rc[c].clone().sub(rc[b]).normalize();
+      RAG.J.hinge[b] = { f:Math.min(0, hv.dot(fr)*sign), l:hv.dot(ax) };
+    }
+  } else {
+    L('handL','sL'); L('handR','sR'); L('footL','hL'); L('footR','hR');
+    M('handL','sR',0.6); M('handR','sL',0.6); M('handL','hR',0.35); M('handR','hL',0.35);
+    M('footL','sL',0.6); M('footR','sR',0.6); M('footL','footR',0.16); M('footL','hR',0.2); M('footR','hL',0.2);
+  }
   RAG.C = C;
 }
 function ragGrab(part, point, x, y){
@@ -1870,9 +2040,23 @@ function ragRelease(){
   if (RAG.pin){ RAG.P[RAG.pin.n].pinned=false; RAG.pin=null; }
   // throws stay playful but never wild (max ~4 units/s)
   for (const p of Object.values(RAG.P)){ _v.subVectors(p.pos,p.prev); const m=4/120; if (_v.length()>m){ _v.setLength(m); p.prev.subVectors(p.pos,_v); } }
-  // a small random shove so he tumbles instead of landing perfectly upright
-  const t=RAG.P.top, k=0.012*CHAR_SCALE; t.prev.x -= (Math.random()-0.5)*2*k; t.prev.z -= (Math.random()*0.6+0.4)*k*(Math.random()<0.5?-1:1);
+  RAG.feet = !zeroG && ragUpright(); RAG.landed = false;
+  if (!RAG.feet){   // hanging crooked: a small random shove so he tumbles
+    const t=RAG.P.top, k=0.012*CHAR_SCALE; t.prev.x -= (Math.random()-0.5)*2*k; t.prev.z -= (Math.random()*0.6+0.4)*k*(Math.random()<0.5?-1:1);
+  }
   RAG.state='fall'; RAG.t=0; RAG.still=0; RAG.spinLeft=0;
+}
+// hanging (nearly) straight, head up, legs down, not swinging or thrown hard: he'll land on his feet
+function ragUpright(){
+  const P = RAG.P, T = ['sL','sR','hL','hR','top'];
+  const sm = _pa.copy(P.sL.pos).add(P.sR.pos).multiplyScalar(0.5), hm = _pb.copy(P.hL.pos).add(P.hR.pos).multiplyScalar(0.5);
+  const U = _pc.subVectors(sm, hm).normalize();
+  const legs = 0.25*CHAR_SCALE*mainRig.root.scale.y;
+  if (U.y < 0.93 || P.top.pos.y < sm.y || P.footL.pos.y > P.hL.pos.y - legs || P.footR.pos.y > P.hR.pos.y - legs) return false;
+  let vx=0, vy=0, vz=0; for (const n of T){ vx+=P[n].pos.x-P[n].prev.x; vy+=P[n].pos.y-P[n].prev.y; vz+=P[n].pos.z-P[n].prev.z; } vx/=5; vy/=5; vz/=5;
+  if (Math.hypot(vx,vz)*120 > 2.2) return false;                      // thrown sideways: tumble
+  let rel = 0; for (const n of T) rel = Math.max(rel, Math.hypot(P[n].pos.x-P[n].prev.x-vx, P[n].pos.y-P[n].prev.y-vy, P[n].pos.z-P[n].prev.z-vz)*120);
+  return rel < 1.4;                                                    // still swinging a lot: tumble
 }
 // the current room's desk blocks, as physics boxes (same clamp as buildRoom)
 function physBlocks(){ const e = ENVS[envI]; if (!e.phys) e.phys = e.blocks.map(([x0,x1,z0,z1,h])=>({ x0, x1, z0:Math.max(z0,-e.D+0.05), z1, h, wallL:x0<=-ROOM.W/2+0.01, wallR:x1>=ROOM.W/2-0.01, wallB:z0<=-e.D+0.1 })); return e.phys; }
@@ -1915,9 +2099,94 @@ function collideParticle(p){
     if (sp > 0.5 && !(o.bumpT > 0)){ o.bump = Math.min(1, sp/2.5); o.bumpT = 0.9; }
   }
 }
+/* ---- ragdoll body: hinge joints, hip range, and limbs that can't pass through the torso, the head or each other ---- */
+const _j = Array.from({length:12}, ()=>new THREE.Vector3());
+const RAG_SEGS = [['sL','elbL','aL'],['elbL','handL','aL'],['sR','elbR','aR'],['elbR','handR','aR'],['hL','kneL','lL'],['kneL','footL','lL'],['hR','kneR','lR'],['kneR','footR','lR']];
+const RAG_SPH  = [['elbL','aL'],['handL','aL'],['elbR','aR'],['handR','aR'],['kneL','lL'],['footL','lL'],['kneR','lR'],['footR','lR'],['top','h']];
+const RAG_DIST = ['elbL','handL','elbR','handR','kneL','footL','kneR','footR'];
+const movable = p => p.pinned ? 0 : 1;
+// elbows / knees bend one way only, around the body's left-right axis. sign +1: the end swings to the front (elbow), -1: to the back (knee)
+function ragHinge(a, b, c, sign, left, fwd, rest, gain){
+  if (c.pinned || b.pinned) return;   // held by the hand / foot / joint: let the limb hang naturally from the grab point
+  const u = _j[6].subVectors(b.pos, a.pos).normalize();
+  // hinge axis = the body's left-right axis, squared up to the upper limb. When the limb itself points
+  // sideways the axis is undefined, so the hinge lets go smoothly there instead of flipping around
+  const axis = _j[8].copy(left).addScaledVector(u, -left.dot(u)), al = axis.length(), w = smooth(0.2, 0.5, al);
+  if (w <= 0) return;
+  axis.divideScalar(al);
+  const front = _j[7].crossVectors(u, axis);
+  const hv = _j[9].subVectors(c.pos, b.pos), hl = hv.length(), f = hv.dot(front)*sign, lat = hv.dot(axis);
+  const tgt = c, k = w*gain;
+  // relative to the rest shape: may not straighten past it, and doesn't bend sideways away from it
+  const fix = _j[10].set(0,0,0), short = rest.f*hl - f, side = rest.l*hl - lat;
+  if (short > 0.01*hl) fix.addScaledVector(front, sign*short*k*0.5);
+  if (Math.abs(side) > 0.05*hl) fix.addScaledVector(axis, side*k*0.06);
+  tgt.pos.add(fix);
+}
+// hip: forward up to ~115°, back ~30°, out ~55°, across ~15°
+function ragHip(hip, kne, side, left, up, fwd){
+  if (kne.pinned) return;
+  const d = _j[6].subVectors(kne.pos, hip.pos), len = d.length(); if (len < 1e-5) return;
+  const dd = -d.dot(up), fw = d.dot(fwd), sd = d.dot(left)*side;
+  const flex = Math.atan2(fw, dd), ab = Math.atan2(sd, Math.hypot(dd, fw));
+  // out of range: snap to the NEAREST stop (a leg swung up past the head wraps around atan2 — clamping
+  // naively would fling it all the way to the other stop)
+  const LO = -0.52, HI = 2.0, TAU = Math.PI*2;
+  let f2 = flex; if (flex > HI || flex < LO){ const dHi = ((flex-HI)%TAU+TAU)%TAU, dLo = ((LO-flex)%TAU+TAU)%TAU; f2 = dHi <= dLo ? HI : LO; }
+  const a2 = clamp(ab, -0.26, 0.95);
+  if (f2 === flex && a2 === ab) return;
+  const hz = Math.cos(a2);
+  const dir = _j[7].copy(up).multiplyScalar(-hz*Math.cos(f2)).addScaledVector(fwd, hz*Math.sin(f2)).addScaledVector(left, side*Math.sin(a2));
+  const mv = _j[8].copy(hip.pos).addScaledVector(dir, len).sub(kne.pos).multiplyScalar(0.5).clampLength(0, 0.12*len);
+  kne.pos.add(mv);
+}
+function ragBody(P, it){
+  const J = RAG.J; if (!J) return;
+  const sm = _j[0].copy(P.sL.pos).add(P.sR.pos).multiplyScalar(0.5), hm = _j[1].copy(P.hL.pos).add(P.hR.pos).multiplyScalar(0.5);
+  const left = _j[2].subVectors(P.sL.pos, P.sR.pos).normalize();
+  const up = _j[3].subVectors(sm, hm); up.addScaledVector(left, -up.dot(left)).normalize();
+  const fwd = _j[4].crossVectors(left, up);
+  // joint limits run once per step (inside every solver pass they fought the floor and made limbs buzz),
+  // and relax once he has been lying on the ground for a while, so he settles instead of creeping
+  const relax = RAG.state==='fall' && !zeroG ? 1 - smooth(1.4, 2.4, RAG.t) : 1;
+  const H = J.hinge;
+  if (it === 0 && relax > 0){ ragHinge(P.sL, P.elbL, P.handL,  1, left, fwd, H.elbL, relax); ragHinge(P.sR, P.elbR, P.handR,  1, left, fwd, H.elbR, relax);
+  ragHinge(P.hL, P.kneL, P.footL, -1, left, fwd, H.kneL, relax); ragHinge(P.hR, P.kneR, P.footR, -1, left, fwd, H.kneR, relax);
+  }
+  if (it === 0 && relax > 0){ ragHip(P.hL, P.kneL,  1, left, up, fwd); ragHip(P.hR, P.kneR, -1, left, up, fwd); }
+  // torso box: hands, elbows, knees and feet get pushed out of the chest / belly
+  const ctr = _j[5].copy(sm).add(hm).multiplyScalar(0.5).addScaledVector(up, J.oy).addScaledVector(fwd, J.oz);
+  for (const n of RAG_DIST){
+    const p = P[n]; if (p.pinned) continue;
+    const r = J.rs[n], d = _j[10].subVectors(p.pos, ctr);
+    const lx = d.dot(left), ly = d.dot(up), lz = d.dot(fwd);
+    const px = J.hx + r - Math.abs(lx), py = J.hy + r - Math.abs(ly), pz = J.hz + r - Math.abs(lz);
+    if (px <= 0 || py <= 0 || pz <= 0) continue;
+    if (px <= py && px <= pz) p.pos.addScaledVector(left, Math.sign(lx||1)*px);
+    else if (pz <= py) p.pos.addScaledVector(fwd, Math.sign(lz||1)*pz);
+    else p.pos.addScaledVector(up, Math.sign(ly||1)*py);
+  }
+  // limbs (capsules) vs hands / elbows / knees / feet / head (spheres) of the other limbs
+  const hu = _j[11].subVectors(P.top.pos, sm).normalize();
+  for (const [an, bn, grp] of RAG_SEGS){
+    const A = P[an], B = P[bn], rseg = grp[0]==='a' ? J.armR : J.legR;
+    for (const [sn, sg] of RAG_SPH){
+      if (sg === grp) continue;
+      const S = P[sn], head = sn === 'top', rs = head ? J.headR : J.rs[sn];
+      const c = head ? _j[10].copy(S.pos).addScaledVector(hu, -rs) : _j[10].copy(S.pos);
+      const ab = _j[6].subVectors(B.pos, A.pos), L2 = ab.lengthSq(); if (L2 < 1e-8) continue;
+      const t = clamp(_j[7].subVectors(c, A.pos).dot(ab)/L2, 0, 1);
+      const q = _j[8].copy(A.pos).addScaledVector(ab, t), dv = _j[9].subVectors(c, q), dist = dv.length(), min = rseg + rs;
+      if (dist >= min || dist < 1e-6) continue;
+      const ws = movable(S), wa = movable(A)*(1-t), wb = movable(B)*t, den = ws + wa*wa + wb*wb; if (den < 1e-6) continue;
+      const k = (min - dist)/den/dist;
+      S.pos.addScaledVector(dv, k*ws); A.pos.addScaledVector(dv, -k*wa); B.pos.addScaledVector(dv, -k*wb);
+    }
+  }
+}
 const _pa = new THREE.Vector3(), _pb = new THREE.Vector3(), _pc = new THREE.Vector3();
 function ragStep(h){
-  const g = zeroG ? 0 : -15*CHAR_SCALE, P = RAG.P, dmp = zeroG ? 0.9985 : 0.986;
+  const g = zeroG ? 0 : -15*CHAR_SCALE, P = RAG.P, dmp = zeroG ? 0.9985 : RAG.state==='fall' ? 0.986 - 0.03*smooth(1.2, 2.4, RAG.t) : 0.986;
   if (zeroG){
     // hover around a personal height, wander slowly (kept away from the walls), paddle with hands and feet
     const fl = RAG.float || (RAG.float = { y:rand(0.95,1.75), ph:rand(0,6.28), wx:rand(-1,1), wz:rand(-1,1) });
@@ -1929,6 +2198,23 @@ function ragStep(h){
     const s1 = Math.sin(fl.ph*3)*0.6*h*h, s2 = Math.cos(fl.ph*2.3)*0.4*h*h;
     if (!P.handL.pinned) P.handL.pos.y += s1; if (!P.handR.pinned) P.handR.pos.y -= s1;
     if (!P.footL.pinned) P.footL.pos.z += s2; if (!P.footR.pinned) P.footR.pos.z -= s2;
+  }
+  // joint damping + a speed cap relative to the body: limbs swing and flop, but can't whip around
+  // faster than the eye can follow (corrections from joint limits / collisions used to fling them)
+  if (RAG.J && !(RAG.state==='fall' && RAG.feet)){
+    let cx=0, cy=0, cz=0; for (const n of ['sL','sR','hL','hR']){ const p=P[n]; cx+=p.pos.x-p.prev.x; cy+=p.pos.y-p.prev.y; cz+=p.pos.z-p.prev.z; } cx/=4; cy/=4; cz/=4;
+    const vmax = 5.5/120, vabs = 9/120;
+    for (const p of Object.values(P)){
+      if (p.pinned) continue;
+      let rx = (p.pos.x-p.prev.x-cx)*0.97, ry = (p.pos.y-p.prev.y-cy)*0.97, rz = (p.pos.z-p.prev.z-cz)*0.97;
+      const rl = Math.hypot(rx,ry,rz); if (rl > vmax){ const k = vmax/rl; rx*=k; ry*=k; rz*=k; }
+      let vx = cx+rx, vy = cy+ry, vz = cz+rz; const vl = Math.hypot(vx,vy,vz); if (vl > vabs){ const k = vabs/vl; vx*=k; vy*=k; vz*=k; }
+      p.prev.set(p.pos.x-vx, p.pos.y-vy, p.pos.z-vz);
+    }
+  }
+  if (RAG.state==='fall' && RAG.feet){
+    let vx=0, vy=0, vz=0, n=0; for (const p of Object.values(P)){ vx+=p.pos.x-p.prev.x; vy+=p.pos.y-p.prev.y; vz+=p.pos.z-p.prev.z; n++; }
+    vx/=n; vy/=n; vz/=n; for (const p of Object.values(P)) p.prev.set(p.pos.x-vx, p.pos.y-vy, p.pos.z-vz);
   }
   for (const p of Object.values(P)){
     if (p.pinned) continue;
@@ -1966,6 +2252,7 @@ function ragStep(h){
       _v.multiplyScalar((d-t)/d/s);
       a.pos.addScaledVector(_v, wa); b.pos.addScaledVector(_v, -wb);
     }
+    ragBody(P, it);
     for (const p of Object.values(P)){
       if (p.pos.y < p.r && zeroG){ const vy = p.pos.y-p.prev.y; p.pos.y = p.r; p.prev.y = p.pos.y + vy*0.55; }
       if (p.pos.y < p.r){ dustHit(p, (p.prev.y-p.pos.y)*120, 0); p.pos.y = p.r; p.prev.x += (p.pos.x-p.prev.x)*0.35; p.prev.z += (p.pos.z-p.prev.z)*0.35; if (p.prev.y < p.pos.y) p.prev.y = p.pos.y + (p.prev.y-p.pos.y)*0.3; }
@@ -1983,6 +2270,11 @@ function ragUpdate(dt){
   RAG.target.lerp(RAG.aim, 1-Math.exp(-18*dt));
   RAG.acc += dt; let n=0;
   while (RAG.acc >= 1/120 && n<6){ ragStep(1/120); RAG.acc -= 1/120; n++; }
+  if (RAG.state==='fall' && RAG.feet){
+    const P = RAG.P, U = _pc.copy(P.sL.pos).add(P.sR.pos).sub(P.hL.pos).sub(P.hR.pos).normalize();
+    if (U.y < 0.85) RAG.feet = false;   // clipped a desk or someone on the way down: tumble after all
+    else for (const f of [P.footL, P.footR]) if (f.pos.y - f.r - groundAt(f.pos.x, f.pos.z) < 0.012){ RAG.settled = true; RAG.landed = true; return; }
+  }
   if (RAG.state==='fall'){
     let v=0; for (const p of Object.values(RAG.P)) v = Math.max(v, p.pos.distanceTo(p.prev)*120);
     RAG.still = v < 0.35 ? RAG.still+dt : 0;
@@ -2013,13 +2305,40 @@ function ragApply(){
   // limbs follow their end points, twist follows the torso
   const down = DOWN.clone().applyQuaternion(qT);
   const limb = (bone, a, b) => { const dir = c(b).sub(c(a)).normalize(); const q = new THREE.Quaternion().setFromUnitVectors(down, dir).multiply(qT); setCharQuat(B[bone], q.multiply(RQ[bone])); };
-  limb('Left_Arm','sL','handL'); limb('Right_Arm','sR','handR'); limb('Left_Leg','hL','footL'); limb('Right_Leg','hR','footR');
+  // jointed limbs: build a full frame per segment (its direction + a twist reference) instead of the
+  // shortest-arc rotation from rest, which flips 180° whenever a limb points up (arm held overhead, legs in the air)
+  // twist reference: every fixed reference axis breaks for some limb direction (that caused 180° flips),
+  // so carry last frame's twist along with the limb and only nudge it toward the body's left-right axis
+  const twistX = (y, L, F) => { const x = L.clone().addScaledVector(y, -L.dot(y)).add(new THREE.Vector3().crossVectors(y, F)); return x.normalize(); };
+  const tw = RAG.tw || (RAG.tw = {});
+  const twistNow = (bone, y) => {
+    const ref = left.clone().addScaledVector(y, -left.dot(y));            // length = how well-defined 'left' is for this limb
+    let x = tw[bone] ? tw[bone].clone().addScaledVector(y, -tw[bone].dot(y)) : null;
+    if (!x || x.lengthSq() < 1e-4) x = twistX(y, left, fwd);
+    x.normalize().addScaledVector(ref, 0.12*ref.length()).normalize();
+    return (tw[bone] = x).clone();
+  };
+  const X0 = new THREE.Vector3(1,0,0), Z0 = new THREE.Vector3(0,0,1);
+  const chain = (upBone, loBone, a, b, e) => {
+    for (const [bone, p, q] of [[upBone,a,b],[loBone,b,e]]){
+      const y0 = RAG.restC[p].clone().sub(RAG.restC[q]).normalize(), x0 = twistX(y0, X0, Z0), z0 = new THREE.Vector3().crossVectors(x0, y0);
+      const y1 = c(p).sub(c(q)).normalize(), x1 = twistNow(bone, y1), z1 = new THREE.Vector3().crossVectors(x1, y1);
+      const q0 = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(x0, y0, z0));
+      const q1 = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(x1, y1, z1));
+      setCharQuat(B[bone], q1.multiply(q0.invert()).multiply(RQ[bone]));
+    }
+  };
+  if (RAG.P.elbL && B.Left_Elbow){ chain('Left_Arm','Left_Elbow','sL','elbL','handL'); chain('Right_Arm','Right_Elbow','sR','elbR','handR'); }
+  else { limb('Left_Arm','sL','handL'); limb('Right_Arm','sR','handR'); }
+  if (RAG.P.kneL && B.Left_Knee){ chain('Left_Leg','Left_Knee','hL','kneL','footL'); chain('Right_Leg','Right_Knee','hR','kneR','footR'); }
+  else { limb('Left_Leg','hL','footL'); limb('Right_Leg','hR','footR'); }
   // contact shadow follows him and fades as he's lifted
   let cx=0, cz=0, minY=Infinity; for (const p of Object.values(RAG.P)){ cx+=p.pos.x; cz+=p.pos.z; minY=Math.min(minY,p.pos.y-p.r); }
   const k = Object.keys(RAG.P).length; blob.position.x = cx/k; blob.position.z = cz/k;
   const lift = clamp(minY/1.2, 0, 1); blob.material.opacity = 1-lift*0.7; blob.scale.set(1+lift*0.6, (1+lift*0.6)*0.62, 1);
 }
-const RAG_BONES = ['World_Bone','Chest','Head','Left_Arm','Right_Arm','Left_Leg','Right_Leg'];
+const RAG_BONES_ALL = ['World_Bone','Chest','Head','Left_Arm','Right_Arm','Left_Elbow','Right_Elbow','Left_Leg','Right_Leg','Left_Knee','Right_Knee'];
+const ragBones = () => RAG_BONES_ALL.filter(n=>mainRig.bones[n]);
 function ragRecoverStart(){
   // which way will he face once he's up? the way his body already faces (or his head points, if he's flat)
   const c = bound, P = RAG.P;
@@ -2040,19 +2359,27 @@ function ragRecoverStart(){
   turntable.updateMatrixWorld(true);
   wbW.premultiply(wb.parent.matrixWorld.clone().invert()).decompose(wb.position, wb.quaternion, _sc);
   wb.updateMatrixWorld(true);
-  RAG.saved = RAG_BONES.map(n=>({ q:mainRig.bones[n].quaternion.clone(), p:mainRig.bones[n].position.clone() }));
+  RAG.savedN = ragBones(); RAG.saved = RAG.savedN.map(n=>({ q:mainRig.bones[n].quaternion.clone(), p:mainRig.bones[n].position.clone() }));
   c.mv = { type:'getup' };
-  if (Math.random() < 0.7) say(c, 'land', true);
+  RAG.recT = RAG.landed ? 0.45 : 1.3;
   othersWatch(c, [1.4,2.4], 0.2);
-  { const pool = chars.filter(o=>o!==c && o.turntable.visible && o.RAG.state==='off'); if (pool.length) cue(pool[Math.floor(Math.random()*pool.length)], 'laugh', rand(0.15,0.45), 1); }
+  const pool = chars.filter(o=>o!==c && o.turntable.visible && o.RAG.state==='off');
+  if (RAG.landed){   // stuck it: squash on landing, maybe a "tadaa", maybe someone claps
+    react('stick', 1); if (Math.random() < 0.6) say(c, 'stuck', true);
+    if (pool.length && Math.random() < 0.6) cue(pool[Math.floor(Math.random()*pool.length)], 'clap', rand(0.2,0.5), 0.9);
+  } else {
+    if (Math.random() < 0.7) say(c, 'land', true);
+    if (pool.length) cue(pool[Math.floor(Math.random()*pool.length)], 'laugh', rand(0.15,0.45), 1);
+  }
+  RAG.feet = RAG.landed = false;
   spin.target = spin.angle = 0;      // walk back and face the camera, whatever he was turned to before
   RAG.state='recover'; RAG.t=0;
 }
 // ease from the landed pose into the live idle; feet are only ever pushed up out of the floor, never pulled down
 const smoother = x => { x = clamp(x,0,1); return x*x*x*(x*(x*6-15)+10); };
 function ragRecoverBlend(dt){
-  RAG.t += dt; const T = 1.3; const k = smoother(RAG.t/T);
-  RAG_BONES.forEach((n,i)=>{ const b=mainRig.bones[n], s=RAG.saved[i];
+  RAG.t += dt; const T = RAG.recT || 1.3; const k = smoother(RAG.t/T);
+  RAG.savedN.forEach((n,i)=>{ const b=mainRig.bones[n], s=RAG.saved[i];
     b.quaternion.copy(s.q.clone().slerp(b.quaternion, k)); b.position.copy(s.p.clone().lerp(b.position, k)); });
   mainRig.bones.World_Bone.updateMatrixWorld(true);
   groundFeet(smooth(0,0.35,RAG.t/T));
@@ -2132,6 +2459,10 @@ function proceduralPose(dt, now){
   premulChar(B.Right_Arm, new THREE.Quaternion().setFromEuler(new THREE.Euler(-(g('rArm',0) + holdW*0.32*(1-w)), 0, -L*g('rArm',1))));
   if (o.lLeg || mp.lLeg) premulChar(B.Left_Leg,  new THREE.Quaternion().setFromEuler(new THREE.Euler(-g('lLeg',0), 0,  L*g('lLeg',1))));
   if (o.rLeg || mp.rLeg) premulChar(B.Right_Leg, new THREE.Quaternion().setFromEuler(new THREE.Euler(-g('rLeg',0), 0, -L*g('rLeg',1))));
+  if (B.Left_Knee){
+    if (o.lKnee || mp.lKnee) premulChar(B.Left_Knee,  new THREE.Quaternion().setFromEuler(new THREE.Euler(g('lKnee',0), 0, 0)));
+    if (o.rKnee || mp.rKnee) premulChar(B.Right_Knee, new THREE.Quaternion().setFromEuler(new THREE.Euler(g('rKnee',0), 0, 0)));
+  }
   groundFeet();
   const held = mainRig.attached.held;
   if (held) held.userData.pxGroup.position.set(g('item',0), g('item',1), g('item',2));
@@ -2139,6 +2470,7 @@ function proceduralPose(dt, now){
   // glow pulse when clothes change
   glow = Math.max(0, glow - dt*2.2);
   mainRig.mat.emissive.setRGB(glow*0.42, glow*0.42, glow*0.48);   // masked by glowTex: only the changed pixels light up
+  if (mainRig.partMats) for (const [k,m] of Object.entries(mainRig.partMats)){ const g = mainRig.glowParts && mainRig.glowParts.has(k) ? glow : 0; m.emissive.setRGB(g*0.42, g*0.42, g*0.48); }
 
   // blink by closing the eye row for a moment
   if (!blink.on && now>blink.next){ blink.on=true; blink.until=now+0.11; drawEyes(true); }
@@ -2159,9 +2491,9 @@ const C0 = () => CHAR_POS;
 const SHOTS = {
   totaal:   { name:'Totaal',    pos:()=>camBase.clone(),                                   look:()=>camAhead.clone(),                      fovK:1,    drift:0.35 },
   portret:  { name:'Portret',   pos:()=>new THREE.Vector3( 0.32, 1.52, C0().z+2.15),       look:()=>C0().clone().setY(1.46),               fovK:0.8, drift:1 },
-  bovenlijf:{ name:'Bovenlijf', pos:()=>new THREE.Vector3(-0.38, 1.26, C0().z+2.5),        look:()=>C0().clone().setY(1.0),                fovK:0.86,  drift:0.9 },
+  bovenlijf:{ name:'Bovenlijf', pos:()=>new THREE.Vector3(-0.38, 1.32, C0().z+2.55),       look:()=>C0().clone().setY(1.1),                fovK:0.86,  drift:0.9 },
   benen:    { name:'Benen',     pos:()=>new THREE.Vector3( 0.25, 0.85, C0().z+2.3),        look:()=>C0().clone().setY(0.55),               fovK:0.84, drift:0.9 },
-  voeten:   { name:'Voeten',    pos:()=>new THREE.Vector3( 0.38, 0.6,  C0().z+2.1),        look:()=>C0().clone().setY(0.36),               fovK:0.8, drift:0.8 },
+  voeten:   { name:'Voeten',    pos:()=>new THREE.Vector3( 0.38, 0.6,  C0().z+2.1),        look:()=>C0().clone().setY(0.3),               fovK:0.8, drift:0.8 },
   held:     { name:'Held',      pos:()=>new THREE.Vector3(-0.38, 0.42, C0().z+2.9),        look:()=>C0().clone().setY(1.08),               fovK:0.95, drift:0.7 },
   zijkant:  { name:'Zijkant',   pos:()=>new THREE.Vector3( 1.2,  1.12, C0().z+2.2),        look:()=>C0().clone().setY(0.86),               fovK:1.0, drift:0.8 },
 };
