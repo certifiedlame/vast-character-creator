@@ -167,7 +167,69 @@
     #cancel{right:150px;bottom:12px;width:54px;height:54px}
     #done{right:8px;bottom:12px;width:132px;height:54px;font-size:20px}
   }
-  @media (prefers-reduced-motion:reduce){ #toast{transition:none} }
+  /* skill screen (opens after Klaar): the live character stays on the left, the tree sits on the right */
+  html.skillmode .ui{opacity:0;pointer-events:none;transition:opacity .25s}
+  .ui{transition:opacity .25s}
+  #skills{position:fixed;inset:0;z-index:30;pointer-events:none;opacity:0;visibility:hidden;transition:opacity .35s,visibility 0s .35s}
+  #skills.open{opacity:1;visibility:visible;transition:opacity .35s}
+  html.skillmode #shade{opacity:0} #shade{transition:opacity .6s}
+  #skills .z{zoom:var(--z);pointer-events:auto}
+  #skBar{position:absolute;left:26px;right:26px;top:20px;display:flex;align-items:center;gap:6px;padding:6px}
+  #skBar .tb{height:44px;padding:0 18px;border:0;border-radius:9px;background:none;font-size:15px;color:var(--ink-2);cursor:pointer}
+  #skBar .tb:hover{background:var(--soft)} #skBar .tb.on{background:var(--blue);color:#fff;cursor:default}
+  #skBar .key{font:800 11px Nunito;border:2px solid var(--line);border-radius:6px;padding:1px 5px;color:var(--muted)}
+  #skBar .sp{flex:1}
+  #skBar .pts{display:flex;align-items:center;gap:10px;font:800 15px Nunito;color:var(--ink-2);padding-right:8px}
+  #skBar .pts b{font:700 20px "Pixelify Sans",monospace;background:var(--ink);color:#fff;border-radius:8px;padding:3px 10px}
+  #skName{position:absolute;left:5%;bottom:34px;display:flex;align-items:center;gap:12px;padding:8px 18px 8px 10px;font-size:22px}
+  #skName i{width:34px;height:34px;border-radius:8px;background:var(--blue);display:grid;place-items:center} #skName svg{width:20px;height:20px}
+  #skRight{position:absolute;right:26px;top:96px;bottom:96px;width:820px;display:flex;flex-direction:column}
+  .skInfo{align-self:flex-end;text-align:right;margin:0 4px 18px}
+  .skInfo h2{margin:0;font-size:38px;line-height:1.1}
+  .skInfo .sub{display:flex;justify-content:flex-end;align-items:center;gap:12px;margin-top:6px;font:800 16px Nunito;color:var(--ink-2)}
+  .skInfo .sub b{font:700 20px "Pixelify Sans",monospace;color:#fff;background:var(--blue);border:2.5px solid var(--ink);border-radius:8px;padding:1px 10px;min-width:62px;text-align:center}
+  .skInfo.locked .sub b{background:#8a93a6}
+  #skTree{position:relative;flex:1;display:flex;flex-direction:column;justify-content:center;padding-bottom:20px}
+  #skLines{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
+  #skLines path{fill:none;stroke-width:4;stroke-linecap:round;stroke-linejoin:round}
+  #skLines .on{stroke:var(--ink)} #skLines .off{stroke:#a3abbb;stroke-dasharray:2 9}
+  .skPanel{position:relative;border:3px solid var(--ink);border-radius:16px;box-shadow:0 5px 0 var(--ink);padding:26px 18px 20px}
+  .skPanel .pt{position:absolute;top:-13px;left:18px;font-size:12px;background:var(--ink);color:#fff;border-radius:7px;padding:3px 9px}
+  .skPanel.base{background:linear-gradient(#fff7e6,#ffeccc);display:flex;justify-content:space-around;margin:0 90px}
+  .skPanel.br{background:#eef1f6;border-color:#a9b1c1;box-shadow:0 5px 0 #a9b1c1;display:flex;justify-content:space-around}
+  .skPanel.br .pt{background:#8a93a6}
+  .skBranches{display:grid;grid-template-columns:1fr 1fr;gap:26px;margin-top:80px}
+  .skT{border:0;background:none;padding:4px;display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer;border-radius:14px;width:180px}
+  .skT .hx{position:relative;width:128px;height:128px;border-radius:22px;border:3px solid var(--ink);box-shadow:0 5px 0 var(--ink);display:grid;place-items:center;transition:transform .12s}
+  .skT .hx svg{width:70px;height:70px}
+  .skT:hover .hx{transform:translateY(-3px)}
+  .skT.sel .hx{box-shadow:0 5px 0 var(--ink),0 0 0 5px #fff,0 0 0 9px var(--blue)}
+  .skT .ct{position:absolute;left:50%;bottom:-14px;transform:translateX(-50%);font:700 17px "Pixelify Sans",monospace;background:var(--ink);color:#fff;border-radius:7px;padding:1px 8px;white-space:nowrap}
+  .skT .nm{font:900 19px Nunito;color:var(--ink);margin-top:10px}
+  .skT .bar{width:170px;height:14px;border:2.5px solid var(--ink);border-radius:7px;background:#fff;overflow:hidden}
+  .skT .bar i{display:block;height:100%;width:0;background:repeating-linear-gradient(90deg,var(--c) 0 12px,var(--c2) 12px 24px);transition:width 1.2s cubic-bezier(.25,.9,.3,1)}
+  .skT.lock{width:150px}
+  .skT.lock .hx{width:100px;height:100px;border-radius:18px;background:#dfe4ec;border-color:#a9b1c1;box-shadow:0 4px 0 #a9b1c1}
+  .skT.lock .hx svg{width:54px;height:54px;opacity:.4;filter:grayscale(1)}
+  .skT.lock.sel .hx{box-shadow:0 4px 0 #a9b1c1,0 0 0 5px #fff,0 0 0 9px #8a93a6}
+  .skT.lock .ct{background:#8a93a6;padding:3px 6px;line-height:0} .skT.lock .ct svg{width:14px;height:14px}
+  .skT.lock .nm{color:#7c8598;font-size:16px}
+  .skT.shake .hx{animation:skShake .4s}
+  @keyframes skShake{20%{transform:translateX(-7px) rotate(-3deg)}40%{transform:translateX(6px) rotate(2deg)}60%{transform:translateX(-4px)}80%{transform:translateX(2px)}}
+  #skBack{position:absolute;right:26px;bottom:22px;height:56px;padding:0 20px 0 10px;display:flex;align-items:center;gap:10px;cursor:pointer;font-size:17px}
+  #skBack:hover{background:var(--soft)} #skBack:active{transform:translateY(4px);box-shadow:0 1px 0 var(--ink)}
+  #skBack .key{font:800 12px Nunito;border:2px solid var(--ink);border-radius:50%;width:30px;height:30px;display:grid;place-items:center;letter-spacing:0}
+  @media (max-width:819px){
+    #skBar{left:8px;right:8px;top:8px} #skBar .tb{padding:0 10px;font-size:12px} #skBar .key,#skBar .pts span{display:none}
+    #skName{left:10px;bottom:auto;top:76px;font-size:17px}
+    #skRight{left:8px;right:8px;top:auto;bottom:84px;width:auto} #skTree{flex:none}
+    .skInfo{align-self:stretch;text-align:left;margin-bottom:12px} .skInfo h2{font-size:24px} .skInfo .sub{justify-content:flex-start}
+    .skPanel.base{margin:0} .skBranches{gap:10px;margin-top:40px}
+    .skT{width:auto} .skT .hx{width:72px;height:72px} .skT .hx svg{width:40px;height:40px} .skT .bar{width:100px} .skT .nm{font-size:14px}
+    .skT.lock .hx{width:56px;height:56px} .skT.lock .nm{font-size:11.5px} .skPanel{padding:18px 8px 12px}
+    #skBack{right:8px;bottom:12px}
+  }
+  @media (prefers-reduced-motion:reduce){ #toast{transition:none} #skills,#skills.open{transition:none} .skT .bar i{transition:none} }
 </style>
 <script type="importmap">
 { "imports": {
@@ -250,6 +312,25 @@
 
 <div id="bubbles" aria-live="polite"></div>
 <canvas id="hand3d" aria-hidden="true"></canvas>
+<section id="skills" aria-label="Vaardigheden" aria-hidden="true">
+  <nav id="skBar" class="z box" aria-label="Menu">
+    <span class="key">Q</span>
+    <button class="tb px" id="skTabChar">Karakter</button>
+    <button class="tb px on" aria-current="page">Vaardigheden</button>
+    <span class="sp"></span>
+    <div class="pts"><span>Ontgrendeld</span><b id="skCount">2/6</b></div>
+  </nav>
+  <div id="skName" class="z box px"><i><svg viewBox="0 0 24 24" fill="#fff"><circle cx="12" cy="8" r="4.2"/><path d="M4 21c.6-4.6 3.8-7 8-7s7.4 2.4 8 7z"/></svg></i><span id="skNameT">Karakter</span></div>
+  <div id="skRight" class="z">
+    <div class="skInfo" id="skInfo"><h2 class="px" id="skTitle">Behulpzaamheid</h2><div class="sub"><span id="skState">Voortgang</span><b id="skPct">90%</b></div></div>
+    <div id="skTree">
+      <svg id="skLines" aria-hidden="true"></svg>
+      <div class="skPanel base" id="skBase"><span class="pt px">Ontgrendeld</span></div>
+      <div class="skBranches" id="skBranches"></div>
+    </div>
+  </div>
+  <button id="skBack" class="z box px" aria-label="Terug naar karakter"><span class="key">Esc</span>Terug</button>
+</section>
 <div id="toast" class="px">Klaar!</div>
 <div id="loading"><div><div class="t px">Laden…</div><div class="bar"><i id="lbar"></i></div><div class="err" id="lerr"></div></div></div>
 
@@ -328,17 +409,18 @@ key.target = lightTgt; rimL.target = lightTgt; rimR.target = lightTgt;
 const ROOM = { W:5.2, H:3.6, D:7.2, camH:1.28, VTAN:722/1679, ASPECT:2912/1632 };
 const wipeRes = new THREE.Vector2(1,1);
 // grey standard material + 25 cm / 1 m grid lines; wipe: mode 1 = incoming room (left of the edge), 2 = outgoing (right of it)
+const ROOM_WHITE = { value:0 };   // 0..1: fades every room to pure white (skill screen)
 function makeRoomMat(color, u){
   const m = new THREE.MeshStandardMaterial({ color, roughness:0.9, metalness:0, side:THREE.DoubleSide });
   m.uniforms = u;
   m.onBeforeCompile = sh=>{
-    Object.assign(sh.uniforms, u);
+    Object.assign(sh.uniforms, u); sh.uniforms.white = ROOM_WHITE;
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vGW;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvGW = (modelMatrix*vec4(transformed,1.0)).xyz;');
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', `#include <common>
-        uniform int mode; uniform float edge; uniform vec2 res; varying vec3 vGW;
+        uniform int mode; uniform float edge; uniform vec2 res; uniform float white; varying vec3 vGW;
         float gridAA(vec3 p, vec3 n, float s){
           vec3 q = p/s, g = abs(fract(q-0.5)-0.5)/max(fwidth(q), vec3(1e-4)) + step(0.5, abs(n))*1e4;
           return 1.0 - min(min(min(g.x,g.y),g.z), 1.0);
@@ -351,7 +433,8 @@ function makeRoomMat(color, u){
         vec3 gN = normalize(cross(dFdx(vGW), dFdy(vGW)));
         diffuseColor.rgb *= 1.0 - 0.09*gridAA(vGW, gN, 0.25) - 0.22*gridAA(vGW, gN, 1.0);`)
       .replace('#include <dithering_fragment>', `#include <dithering_fragment>
-        if (mode==1) gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(1.0), smoothstep(edge-0.01, edge, wS)*0.85);`);
+        if (mode==1) gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(1.0), smoothstep(edge-0.01, edge, wS)*0.85);
+        gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(1.0), white);`);
   };
   return m;
 }
@@ -1489,6 +1572,7 @@ const SAY = {
 const LOUD = new Set(['dangle','float','bumped']);
 const bubbleLayer = $('#bubbles');
 function say(c, cat, force=false){
+  if (SKT.open && c!==active) return;   // the others are hidden on the skill screen
   if (!SET.bubbles) return;
   const t = nowS();
   if (!c || !c.turntable.visible) return;
@@ -1828,7 +1912,97 @@ $('#done').onclick = ()=>{
   savedState = snap(); save(); react('cheer',1);
   spawnAt(bounce.localToWorld(new THREE.Vector3(0,2.1,0)), [0xffd335,0xffffff,0x3f9b3a,0x2f7cf6], 34, 1.6);
   const n = $('#name').value.trim(); toast(n ? n+' is klaar!' : 'Klaar!');
+  clearTimeout(SKT.h); SKT.h = setTimeout(openSkills, 900);   // let the cheer play, then show the skill tree
 };
+
+/* ============================================================
+   SKILL TREE (screen after Klaar)
+   ============================================================ */
+const SKILL_IC = {
+  help: '<path d="M12 20s-7-4.4-7-9.6A3.9 3.9 0 0 1 12 8a3.9 3.9 0 0 1 7 2.4C19 15.6 12 20 12 20z" fill="#fff" stroke="#1f2636" stroke-width="2.2" stroke-linejoin="round"/><path d="M3 21l3.5-3.5M21 21l-3.5-3.5" stroke="#1f2636" stroke-width="2.2" stroke-linecap="round"/>',
+  talk: '<path d="M4 5h16v11H11l-5 4v-4H4z" fill="#fff" stroke="#1f2636" stroke-width="2.2" stroke-linejoin="round"/><circle cx="8.5" cy="10.5" r="1.3" fill="#1f2636"/><circle cx="12" cy="10.5" r="1.3" fill="#1f2636"/><circle cx="15.5" cy="10.5" r="1.3" fill="#1f2636"/>',
+  joke: '<circle cx="12" cy="12" r="8.5" fill="#ffd335" stroke="#1f2636" stroke-width="2.2"/><path d="M7.5 13h9a4.5 4.5 0 0 1-9 0z" fill="#1f2636"/><path d="M8 9.5l1.6-1.2 1.4 1.2M13 9.5l1.4-1.2 1.6 1.2" fill="none" stroke="#1f2636" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+  shield: '<path d="M12 3l7.5 3v5.5c0 4.6-3.2 8-7.5 9.5-4.3-1.5-7.5-4.9-7.5-9.5V6z" fill="#7fb5ff" stroke="#1f2636" stroke-width="2.2" stroke-linejoin="round"/><path d="M12 3v18" stroke="#1f2636" stroke-width="1.8"/>',
+  angry: '<circle cx="12" cy="12.5" r="8.5" fill="#ff7a5c" stroke="#1f2636" stroke-width="2.2"/><path d="M7.5 9l3 1.4M16.5 9l-3 1.4" stroke="#1f2636" stroke-width="2" stroke-linecap="round"/><path d="M8.5 17c1.8-1.6 5.2-1.6 7 0" fill="none" stroke="#1f2636" stroke-width="2" stroke-linecap="round"/>',
+  love: '<path d="M12 20.5S3.5 15.4 3.5 9.2A4.6 4.6 0 0 1 12 6.6a4.6 4.6 0 0 1 8.5 2.6c0 6.2-8.5 11.3-8.5 11.3z" fill="#ff6fa0" stroke="#1f2636" stroke-width="2.2" stroke-linejoin="round"/><path d="M7.5 9.5a2.2 2.2 0 0 1 2-1.6" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/>',
+};
+// unlocked skills (with progress), and the locked ones that branch off each of them
+const SKILLS = [
+  { id:'help', name:'Behulpzaamheid', pct:90, bg:'#ffe3ea', c:'#ff6f8f', c2:'#ff9ab0', next:[
+    { id:'shield', name:'Zelfbescherming' }, { id:'angry', name:'Boosheid' } ] },
+  { id:'talk', name:'Communicatie', pct:20, bg:'#e1edff', c:'#2f7cf6', c2:'#5b9bff', next:[
+    { id:'joke', name:'Grapjes' }, { id:'love', name:'Verliefdheid' } ] },
+];
+const LOCK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.8" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2" fill="#fff" stroke="none"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>';
+const SKT = { h:0, built:false, open:false, sel:'help', off:0, offA:-1 };
+const skById = id => { for (const s of SKILLS){ if (s.id===id) return s; for (const l of s.next) if (l.id===id) return {...l, locked:true, parent:s}; } };
+function selectSkill(id){
+  SKT.sel = id; const s = skById(id);
+  document.querySelectorAll('#skills .skT').forEach(b=>{ b.classList.toggle('sel', b.dataset.id===id); b.setAttribute('aria-pressed', b.dataset.id===id); });
+  $('#skTitle').textContent = s.name;
+  $('#skInfo').classList.toggle('locked', !!s.locked);
+  $('#skState').textContent = s.locked ? 'Nog niet beschikbaar' : 'Voortgang';
+  $('#skPct').innerHTML = s.locked ? LOCK_SVG.replace('<svg ', '<svg style="width:16px;height:16px;vertical-align:-2px" ') : s.pct+'%';
+}
+function buildSkills(){
+  if (SKT.built) return; SKT.built = true;
+  const base = $('#skBase'), brs = $('#skBranches');
+  for (const s of SKILLS){
+    const b = document.createElement('button'); b.className = 'skT'; b.dataset.id = s.id;
+    b.style.setProperty('--c', s.c); b.style.setProperty('--c2', s.c2);
+    b.innerHTML = `<div class="hx" style="background:${s.bg}"><svg viewBox="0 0 24 24">${SKILL_IC[s.id]}</svg><span class="ct">0%</span></div><span class="nm">${s.name}</span>
+      <div class="bar" role="meter" aria-label="${s.name}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${s.pct}"><i></i></div>`;
+    b.onclick = ()=>selectSkill(s.id);
+    base.appendChild(b);
+    const p = document.createElement('div'); p.className = 'skPanel br'; p.dataset.parent = s.id;
+    p.innerHTML = `<span class="pt px">${s.name}</span>`;
+    for (const l of s.next){
+      const t = document.createElement('button'); t.className = 'skT lock'; t.dataset.id = l.id;
+      t.setAttribute('aria-label', l.name+', nog niet beschikbaar');
+      t.innerHTML = `<div class="hx"><svg viewBox="0 0 24 24">${SKILL_IC[l.id]}</svg><span class="ct">${LOCK_SVG}</span></div><span class="nm">${l.name}</span>`;
+      t.onclick = ()=>{ selectSkill(l.id); t.classList.remove('shake'); void t.offsetWidth; t.classList.add('shake'); };
+      p.appendChild(t);
+    }
+    brs.appendChild(p);
+  }
+  $('#skCount').textContent = SKILLS.length+'/'+SKILLS.reduce((n,s)=>n+1+s.next.length,0);
+  $('#skBack').onclick = closeSkills; $('#skTabChar').onclick = closeSkills;
+  addEventListener('resize', ()=>{ if (SKT.open) drawSkillLines(); });
+}
+function drawSkillLines(){
+  const box = $('#skTree').getBoundingClientRect(), z = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--z'))||1;
+  const P = (el, side)=>{ const r = el.getBoundingClientRect(); return [(r.left + r.width/2 - box.left)/z, ((side==='b' ? r.bottom + 8 : r.top - 2) - box.top)/z]; };
+  let d = '';
+  for (const s of SKILLS){
+    const [x1,y1] = P($(`#skBase [data-id="${s.id}"] .bar`), 'b'), [x2,y2] = P($(`#skBranches [data-parent="${s.id}"]`), 't');
+    const my = (y1+y2)/2; d += `<path class="off" d="M${x1} ${y1}V${my}H${x2}V${y2}"/>`;
+  }
+  $('#skLines').innerHTML = d;
+}
+function openSkills(){
+  buildSkills();
+  const n = $('#name').value.trim(); $('#skNameT').textContent = n || 'Karakter';
+  const sk = $('#skills'); sk.classList.add('open'); sk.setAttribute('aria-hidden','false'); SKT.open = true;
+  document.documentElement.classList.add('skillmode');
+  goShot('totaal', {keepAuto:true}); zoomT = 0;   // full-body framing, scroll zoom reset
+  selectSkill(SKT.sel);
+  for (const b of document.querySelectorAll('#skBase .skT')){ b.querySelector('.bar i').style.width = '0%'; b.querySelector('.ct').textContent = '0%'; }
+  requestAnimationFrame(()=>{ drawSkillLines(); setTimeout(()=>{
+    for (const s of SKILLS){
+      const b = $(`#skBase [data-id="${s.id}"]`); b.querySelector('.bar i').style.width = s.pct+'%';
+      const t0 = performance.now(), pc = b.querySelector('.ct');
+      const tick = now => { const k = Math.min(1,(now-t0)/1200), e = 1-Math.pow(1-k,3); pc.textContent = Math.round(s.pct*e)+'%'; if (k<1 && SKT.open) requestAnimationFrame(tick); };
+      requestAnimationFrame(tick);
+    }
+  }, 300); });
+  setTimeout(()=>$('#skBack').focus({preventScroll:true}), 450);
+}
+function closeSkills(){
+  clearTimeout(SKT.h); const sk = $('#skills'); sk.classList.remove('open'); sk.setAttribute('aria-hidden','true'); SKT.open = false;
+  document.documentElement.classList.remove('skillmode');
+  if (camS.auto && curCat) goShot(CAT_SHOT[curCat]||'totaal');
+  $('#done').focus({preventScroll:true});
+}
 function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'),2200); }
 
 // top-right tools
@@ -1847,6 +2021,7 @@ $('#optBub').onchange = e=>{ SET.bubbles = e.target.checked; if (!SET.bubbles) f
 $('#name').addEventListener('input', ()=>{ if (active) active.name = $('#name').value; save(); });
 $('#name').addEventListener('keydown', e=>{ if(e.key==='Enter') e.target.blur(); e.stopPropagation(); });
 addEventListener('keydown', e=>{
+  if (SKT.open){ if (e.key==='Escape'||e.key==='q'||e.key==='Q') closeSkills(); return; }   // creator shortcuts are off on the skill tree
   if (e.target.tagName==='INPUT') return;
   const mod = e.ctrlKey||e.metaKey;
   if (mod && e.key.toLowerCase()==='z'){ e.preventDefault(); (e.shiftKey? $('#redo') : $('#undo')).click(); return; }
@@ -2627,6 +2802,7 @@ if (!HAND) document.documentElement.classList.remove('hand3d');
    ============================================================ */
 let baseFov = 45, baseYaw = 0, parallaxK = 1, layoutZ = 1;
 const camBase = new THREE.Vector3(0, ROOM.camH, 0), camAhead = new THREE.Vector3(0, ROOM.camH, -ROOM.D);
+let LR = { w:1, h:1 };   // the scene rect from layout(), reused by the skill-screen camera offset
 function layout(){
   const W=innerWidth, H=innerHeight, wide = W>=820; renderer.setSize(W,H,false);
   canvas.style.width=W+'px'; canvas.style.height=H+'px';
@@ -2642,7 +2818,7 @@ function layout(){
   const vt = (asp <= ROOM.ASPECT ? ROOM.VTAN : ROOM.VTAN*ROOM.ASPECT/asp) * 0.94;   // 6% margin for parallax
   baseFov = THREE.MathUtils.radToDeg(2*Math.atan(vt));
   camera.fov = baseFov; camera.aspect = asp; camera.zoom = 1;
-  camera.setViewOffset(rect.w, rect.h, 0, 0, W, H);
+  camera.setViewOffset(rect.w, rect.h, 0, 0, W, H); LR = rect; SKT.offA = -1;
   camera.updateProjectionMatrix();
   camera.position.copy(camBase); camera.lookAt(camAhead); camera.updateMatrixWorld(true);
   renderer.getDrawingBufferSize(wipeRes);
@@ -2678,12 +2854,23 @@ function loop(){
   const zk = smooth(0,1,zIn)*(camS.shot==='totaal' ? 0.85 : 0.3);
   camera.lookAt(_dir2.copy(camS.cur.look).lerp(camAhead, zOut).lerp(_chest, zk));
   const f = baseFov*(camS.cur.fovK + (1.05-camS.cur.fovK)*zOut)/(1+zIn*(ZOOM_IN[camS.shot] ?? 1)); if (Math.abs(camera.fov-f)>1e-3){ camera.fov = f; camera.updateProjectionMatrix(); }
+  SKT.off = damp(SKT.off, SKT.open && innerWidth>=820 ? 0.26 : 0, 5, dt); if (SKT.off < 1e-4) SKT.off = 0;
+  if (Math.abs(SKT.off-SKT.offA) > 1e-5){ SKT.offA = SKT.off; camera.setViewOffset(LR.w, LR.h, SKT.off*innerWidth, 0, innerWidth, innerHeight); camera.updateProjectionMatrix(); }
   camera.updateMatrixWorld(true);
   placeArrows(innerWidth, innerHeight, layoutZ);
   updateWipe(dt);
 
   scene.updateMatrixWorld(true);
   for (const c of chars){ useChar(c); updateChar(dt, now); }
+  // skill screen: the room fades to white and everyone but the active character pops away
+  SKT.white = damp(SKT.white||0, SKT.open ? 1 : 0, 3.2, dt); if (SKT.white < 1e-3) SKT.white = 0;
+  ROOM_WHITE.value = smooth(0, 1, SKT.white);
+  for (const c of chars){ if (c.appear < 1) continue;
+    const hide = c!==active && SKT.white > 0.35;
+    if (hide === !!c.isoHidden) continue;
+    c.isoHidden = hide; c.turntable.visible = c.blob.visible = !hide;
+    spawnAt(c.turntable.position.clone().setY(1.0), [0xffffff,0xe9eef5,0xd5dae4], 18, 1.1);
+  }
   useChar(active);
 
   // item pop-out
