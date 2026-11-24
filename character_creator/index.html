@@ -138,6 +138,9 @@
   .bub{position:absolute;left:0;top:0;transform-origin:50% 100%;background:#fff;border:3px solid var(--ink);border-radius:14px;box-shadow:0 4px 0 var(--ink);padding:6px 13px 7px;font:800 calc(17px*var(--z,1)) Nunito;color:var(--ink);white-space:nowrap;will-change:transform,opacity}
   .bub::before{content:'';position:absolute;left:50%;bottom:-14px;margin-left:-10px;border:10px solid transparent;border-top-color:var(--ink);border-bottom:0}
   .bub::after{content:'';position:absolute;left:50%;bottom:-8px;margin-left:-7px;border:7px solid transparent;border-top-color:#fff;border-bottom:0}
+  .bub.dots{padding:9px 13px 10px;line-height:0} .bub.dots i{display:inline-block;width:calc(9px*var(--z,1));height:calc(9px*var(--z,1));border-radius:50%;background:var(--ink);margin:0 calc(3px*var(--z,1));animation:bubDot 1.3s ease-in-out infinite}
+  .bub.dots i:nth-child(2){animation-delay:.18s} .bub.dots i:nth-child(3){animation-delay:.36s}
+  @keyframes bubDot{0%,55%,100%{transform:none;opacity:.3}25%{transform:translateY(-5px);opacity:1}}
   .bub.loud{background:#fff3c4} .bub.loud::after{border-top-color:#fff3c4}
   /* 3D hand cursor (mouse only; the native cursor comes back if WebGL for it fails) */
   #hand3d{position:fixed;inset:0;z-index:40;pointer-events:none;width:100vw;height:100vh}
@@ -183,22 +186,53 @@
   #skBar .pts b{font:700 20px "Pixelify Sans",monospace;background:var(--ink);color:#fff;border-radius:8px;padding:3px 10px}
   #skName{position:absolute;left:5%;bottom:34px;display:flex;align-items:center;gap:12px;padding:8px 18px 8px 10px;font-size:22px}
   #skName i{width:34px;height:34px;border-radius:8px;background:var(--blue);display:grid;place-items:center} #skName svg{width:20px;height:20px}
-  #skRight{position:absolute;right:26px;top:96px;bottom:96px;width:820px;display:flex;flex-direction:column}
-  .skInfo{align-self:flex-end;text-align:right;margin:0 4px 18px}
-  .skInfo h2{margin:0;font-size:38px;line-height:1.1}
-  .skInfo .sub{display:flex;justify-content:flex-end;align-items:center;gap:12px;margin-top:6px;font:800 16px Nunito;color:var(--ink-2)}
-  .skInfo .sub b{font:700 20px "Pixelify Sans",monospace;color:#fff;background:var(--blue);border:2.5px solid var(--ink);border-radius:8px;padding:1px 10px;min-width:62px;text-align:center}
-  .skInfo.locked .sub b{background:#8a93a6}
-  #skTree{position:relative;flex:1;display:flex;flex-direction:column;justify-content:center;padding-bottom:20px}
+  /* scrollable tree view: fills the right side, drag or scroll to look around */
+  #skView{position:absolute;left:43%;right:0;top:0;bottom:0;overflow:auto;pointer-events:auto;cursor:grab;scrollbar-width:thin;scrollbar-color:#c3c9d6 transparent;
+    -webkit-mask-image:linear-gradient(180deg,transparent 0,#000 130px,#000 calc(100% - 40px),transparent 100%);mask-image:linear-gradient(180deg,transparent 0,#000 130px,#000 calc(100% - 40px),transparent 100%)}
+  #skView.drag{cursor:grabbing} #skView.drag .skT{cursor:grabbing}
+  #skTree{position:relative;zoom:var(--z);width:1000px;margin:0 auto;padding:150px 40px 190px}
   #skLines{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
   #skLines path{fill:none;stroke-width:4;stroke-linecap:round;stroke-linejoin:round}
-  #skLines .on{stroke:var(--ink)} #skLines .off{stroke:#a3abbb;stroke-dasharray:2 9}
-  .skPanel{position:relative;border:3px solid var(--ink);border-radius:16px;box-shadow:0 5px 0 var(--ink);padding:26px 18px 20px}
+  #skLines .on{stroke:var(--ink)} #skLines .off{stroke:#a3abbb;stroke-dasharray:2 9} #skLines .ghost{stroke:#d0d5de;stroke-dasharray:2 9}
+  .skRowP{display:grid;grid-template-columns:1fr 1fr;gap:28px;margin-bottom:110px}
+  #skBase{margin-bottom:110px}
+  /* endless filler rows: locked skills that aren't designed yet; a dotted line climbs from each panel to the row above */
+  .skRowF{display:grid;gap:22px;margin:0 -120px 110px}
+  .skRowF .skPanel{background:#f3f5f9;border-color:#c3c9d6;box-shadow:0 5px 0 #c3c9d6;display:flex;justify-content:space-around;padding:26px 10px 18px}
+  .skRowF .skPanel .pt{background:#a9b1c1}
+  .skRowF .skPanel::before{content:'';position:absolute;left:50%;top:-112px;height:104px;border-left:4px dotted #ccd2dc;margin-left:-2px}
+  .skPanel.ghost::before{content:'';position:absolute;left:50%;top:-112px;height:104px;border-left:4px dotted #ccd2dc;margin-left:-2px}
+  #skUp .skRowF:first-child .skPanel::before{display:none}
+  .skRowF .skT{width:120px;cursor:pointer} .skRowF .skT .hx{width:78px;height:78px;border-radius:17px}
+  .skRowF .skT .hx svg{width:42px;height:42px} .skRowF .skT .nm{font-size:13.5px;white-space:nowrap}
+  .skRowP.ghosts{grid-template-columns:repeat(4,1fr);gap:22px;margin-left:-120px;margin-right:-120px}
+  .skPanel{position:relative;border:3px solid var(--ink);border-radius:16px;box-shadow:0 5px 0 var(--ink);padding:28px 18px 22px}
   .skPanel .pt{position:absolute;top:-13px;left:18px;font-size:12px;background:var(--ink);color:#fff;border-radius:7px;padding:3px 9px}
-  .skPanel.base{background:linear-gradient(#fff7e6,#ffeccc);display:flex;justify-content:space-around;margin:0 90px}
+  .skPanel.base{background:linear-gradient(#fff7e6,#ffeccc);display:flex;justify-content:space-around;margin:0 110px}
   .skPanel.br{background:#eef1f6;border-color:#a9b1c1;box-shadow:0 5px 0 #a9b1c1;display:flex;justify-content:space-around}
   .skPanel.br .pt{background:#8a93a6}
-  .skBranches{display:grid;grid-template-columns:1fr 1fr;gap:26px;margin-top:80px}
+  .skPanel.ghost{background:#f6f7fa;border:3px dashed #d0d5de;box-shadow:none;height:150px;display:flex;justify-content:space-around;align-items:center}
+  .skPanel.ghost .pt{background:#d0d5de}
+  .skPanel.ghost i{width:64px;height:64px;border-radius:16px;border:3px dashed #d0d5de;display:grid;place-items:center;font:700 26px "Pixelify Sans",monospace;color:#c4cad5;font-style:normal}
+  #skHint{position:absolute;right:190px;bottom:36px;font:800 13px Nunito;color:var(--muted);zoom:var(--z);background:rgba(255,255,255,.92);border-radius:8px;padding:5px 10px}
+  /* double-click: one skill opened big over the tree */
+  #skFocus{position:absolute;left:45%;right:26px;top:96px;bottom:96px;display:flex;flex-direction:column;justify-content:center;padding:40px 54px;pointer-events:auto;
+    opacity:0;visibility:hidden;transform:scale(.6);transition:opacity .2s,transform .32s cubic-bezier(.2,1.3,.4,1),visibility 0s .32s}
+  #skFocus.open{opacity:1;visibility:visible;transform:none;transition:opacity .2s,transform .32s cubic-bezier(.2,1.3,.4,1)}
+  #skFocus .in{zoom:var(--z);display:flex;flex-direction:column;gap:26px}
+  #skFocus .top{display:flex;align-items:center;gap:34px}
+  #skFocus .hx{width:190px;height:190px;flex:none;border-radius:34px;border:4px solid var(--ink);box-shadow:0 7px 0 var(--ink);display:grid;place-items:center}
+  #skFocus .hx svg{width:110px;height:110px}
+  #skFocus h2{margin:0 0 10px;font-size:46px;line-height:1.05}
+  #skFocus .chip{display:inline-block;font:800 15px Nunito;color:#fff;background:var(--blue);border:2.5px solid var(--ink);border-radius:8px;padding:3px 12px}
+  #skFocus.locked .chip{background:#8a93a6} #skFocus.locked .hx{background:#dfe4ec;border-color:#a9b1c1;box-shadow:0 7px 0 #a9b1c1} #skFocus.locked .hx svg{opacity:.4;filter:grayscale(1)}
+  #skFocus .meter{display:flex;align-items:center;gap:18px}
+  #skFocus .bar{flex:1;height:30px;border:3px solid var(--ink);border-radius:10px;background:#fff;overflow:hidden}
+  #skFocus .bar i{display:block;height:100%;width:0;background:repeating-linear-gradient(90deg,var(--c) 0 18px,var(--c2) 18px 36px);transition:width .9s cubic-bezier(.25,.9,.3,1)}
+  #skFocus .fpct{font:700 34px "Pixelify Sans",monospace;min-width:96px;text-align:right}
+  #skFocus p{margin:0;font:800 18px Nunito;color:var(--ink-2)} #skFocus p b{color:var(--ink)}
+  #skFocus .x{position:absolute;top:16px;right:16px;width:46px;height:46px;border-radius:12px;display:grid;place-items:center;cursor:pointer;padding:0;zoom:var(--z)}
+  #skFocus .x:hover{background:var(--soft)} #skFocus .x svg{width:20px;height:20px}
   .skT{border:0;background:none;padding:4px;display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer;border-radius:14px;width:180px}
   .skT .hx{position:relative;width:128px;height:128px;border-radius:22px;border:3px solid var(--ink);box-shadow:0 5px 0 var(--ink);display:grid;place-items:center;transition:transform .12s}
   .skT .hx svg{width:70px;height:70px}
@@ -222,9 +256,10 @@
   @media (max-width:819px){
     #skBar{left:8px;right:8px;top:8px} #skBar .tb{padding:0 10px;font-size:12px} #skBar .key,#skBar .pts span{display:none}
     #skName{left:10px;bottom:auto;top:76px;font-size:17px}
-    #skRight{left:8px;right:8px;top:auto;bottom:84px;width:auto} #skTree{flex:none}
-    .skInfo{align-self:stretch;text-align:left;margin-bottom:12px} .skInfo h2{font-size:24px} .skInfo .sub{justify-content:flex-start}
-    .skPanel.base{margin:0} .skBranches{gap:10px;margin-top:40px}
+    .skRowF{margin:0 0 60px;gap:8px} .skRowF .skT{width:auto} .skRowF .skPanel::before{top:-62px;height:54px}
+    #skView{left:0;top:40%} #skTree{width:640px;padding:60px 16px 120px} .skRowP{gap:10px;margin-bottom:60px} .skRowP.ghosts{margin-left:0;margin-right:0;gap:8px}
+    .skPanel.base{margin:0} #skHint{display:none}
+    #skFocus{left:8px;right:8px;top:40%;bottom:80px;padding:20px} #skFocus .hx{width:100px;height:100px} #skFocus .hx svg{width:60px;height:60px} #skFocus h2{font-size:26px}
     .skT{width:auto} .skT .hx{width:72px;height:72px} .skT .hx svg{width:40px;height:40px} .skT .bar{width:100px} .skT .nm{font-size:14px}
     .skT.lock .hx{width:56px;height:56px} .skT.lock .nm{font-size:11.5px} .skPanel{padding:18px 8px 12px}
     #skBack{right:8px;bottom:12px}
@@ -321,14 +356,25 @@
     <div class="pts"><span>Ontgrendeld</span><b id="skCount">2/6</b></div>
   </nav>
   <div id="skName" class="z box px"><i><svg viewBox="0 0 24 24" fill="#fff"><circle cx="12" cy="8" r="4.2"/><path d="M4 21c.6-4.6 3.8-7 8-7s7.4 2.4 8 7z"/></svg></i><span id="skNameT">Karakter</span></div>
-  <div id="skRight" class="z">
-    <div class="skInfo" id="skInfo"><h2 class="px" id="skTitle">Behulpzaamheid</h2><div class="sub"><span id="skState">Voortgang</span><b id="skPct">90%</b></div></div>
+  <div id="skView">
     <div id="skTree">
       <svg id="skLines" aria-hidden="true"></svg>
+      <div id="skUp"></div>
+      <div class="skRowP ghosts" id="skGhosts"></div>
+      <div class="skRowP" id="skBranches"></div>
       <div class="skPanel base" id="skBase"><span class="pt px">Ontgrendeld</span></div>
-      <div class="skBranches" id="skBranches"></div>
+      <div id="skDown"></div>
     </div>
   </div>
+  <div id="skFocus" class="box" role="dialog" aria-label="Vaardigheid">
+    <button class="x box" id="skFocusX" aria-label="Sluiten"><svg viewBox="0 0 24 24" stroke="#1f2636" stroke-width="3.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    <div class="in">
+      <div class="top"><div class="hx" id="skFIc"></div><div><h2 class="px" id="skFName"></h2><span class="chip" id="skFChip"></span></div></div>
+      <div class="meter" id="skFMeter"><div class="bar"><i id="skFBar"></i></div><b class="fpct" id="skFPct"></b></div>
+      <p id="skFText"></p>
+    </div>
+  </div>
+  <div id="skHint">Dubbelklik op een vaardigheid om hem groot te openen</div>
   <button id="skBack" class="z box px" aria-label="Terug naar karakter"><span class="key">Esc</span>Terug</button>
 </section>
 <div id="toast" class="px">Klaar!</div>
@@ -704,6 +750,31 @@ const REACT = {
     return { rLeg:[0.18*o+0.22*tp,0.05*o], lArm:[-0.25*o,0.55*o], rArm:[-0.25*o,0.55*o], head:[-0.08*o,0.2*o,0] }; }},
   yawn:{T:2.4, f:t=>{ const o=bump(t,.1,.6,1.6,2.2);
     return { head:[0.45*o,0,0], rArm:[2.2*o,0.2*o], chest:[-0.08*o,0,0], lArm:[0,0.1*o] }; }},
+  // ---- thinking (skill tree): slow, long clips, no hops ----
+  // hand to the chin, rub it, other arm folded under; head tilted up a bit
+  chin:{T:4.2, f:t=>{ const o=bump(t,0,.6,3.4,4.1), rub=0.07*Math.sin(t*5.5)*bump(t,.7,1,3,3.4), nod=bump(t,2.2,2.5,2.6,2.9);
+    return { rArm:[1.35*o, -0.55*o], rElb:[2.05*o + rub], lArm:[0.35*o, -0.72*o], lElb:[1.25*o], head:[0.16*o - 0.12*nod, 0.1*o, 0.1*o], chest:[0.02*o, 0, 0.03*o] }; }},
+  // arms folded, gaze drifts up and to the side, weight on one leg
+  ponder:{T:4.6, f:t=>{ const o=bump(t,0,.7,3.8,4.5), a=bump(t,.6,1.2,2.2,2.7), b=bump(t,2.3,2.8,3.6,4.1);
+    return { lArm:[0.42*o, -0.78*o], rArm:[0.42*o, -0.78*o], lElb:[1.6*o], rElb:[1.6*o], head:[0.32*o, 0.45*a - 0.3*b, -0.1*o], chest:[-0.03*o, 0.06*a - 0.04*b, 0.05*o], lLeg:[0, 0.07*o] }; }},
+  // finger to the temple, thinking hard... then the finger goes up: idea!
+  temple:{T:3.8, f:t=>{ const th=bump(t,0,.5,1.9,2.25), up=bump(t,2.0,2.3,3.1,3.7), sh=0.03*Math.sin(t*9)*bump(t,.6,.8,1.7,1.9);
+    return { rArm:[1.65*th + 2.7*up, 0.45*th + 0.15*up], rElb:[1.95*th + 0.15*up], head:[-0.08*th + 0.25*up + sh, 0, 0.16*th], chest:[0.03*th - 0.06*up, 0, 0.04*th], lArm:[0, 0.12*th], hop:0.03*bump(t,2.1,2.25,2.3,2.5), sq:-0.02*up }; }},
+  // look over at the skill tree (his left = the right of the screen), small nod
+  glance:{T:3.4, f:t=>{ const o=bump(t,0,.5,2.6,3.3), nod=bump(t,1.5,1.75,1.8,2.1);
+    return { head:[0.06*o - 0.2*nod, 0.72*o, 0.05*o], chest:[0, 0.22*o, 0], lArm:[0.15*o, 0.1*o], rArm:[0.35*o, -0.2*o], rElb:[0.9*o] }; }},
+  // left hand on the chin, slow "hmm" nods
+  hmm:{T:4.0, f:t=>{ const o=bump(t,0,.6,3.2,3.9), n=Math.max(0, Math.sin((t-.8)*4.2))*bump(t,.8,1,2.9,3.2);
+    return { lArm:[1.35*o, -0.55*o], lElb:[2.05*o], rArm:[0.35*o, -0.72*o], rElb:[1.25*o], head:[-0.18*n + 0.06*o, -0.12*o, -0.08*o], chest:[0.03*o, 0, -0.03*o] }; }},
+  // count on the fingers: hand up, three little taps
+  count:{T:3.6, f:t=>{ const o=bump(t,0,.5,2.8,3.5), tp=Math.abs(Math.sin((t-.7)*7.5))*bump(t,.7,.85,2.5,2.7);
+    return { lArm:[0.5*o, -0.4*o], lElb:[1.35*o], rArm:[0.48*o + 0.06*tp, -0.5*o], rElb:[1.4*o + 0.12*tp], head:[-0.3*o, 0, 0.06*Math.sin(t*3)*o], chest:[0.05*o,0,0] }; }},
+  // crouch and put the held thing on the floor by the right foot (hand is lowest around 0.62 s)
+  putdown:{T:1.5, f:t=>{ const o=bump(t,0,.45,.8,1.4);
+    return { chest:[0.5*o,0.12*o,0], head:[-0.4*o,0,0], rArm:[0.55*o,0.2*o], rElb:[0.15*o], lArm:[0.25*o,0.2*o], lLeg:[0.75*o,0], rLeg:[0.75*o,0], lKnee:[1.1*o], rKnee:[1.1*o] }; }},
+  // nose in the book, other hand turns a page
+  read:{T:4.6, f:t=>{ const o=bump(t,0,.5,3.8,4.5), fl=bump(t,1.7,2.0,2.35,2.7), sw=Math.sin(t*1.6);
+    return { rArm:[0.42*o, -0.22*o], rElb:[1.2*o], lArm:[0.7*fl, -0.6*fl], lElb:[1.35*fl], head:[-0.38*o + 0.04*sw*o, 0.1*sw*o - 0.15*fl, 0], chest:[0.06*o,0,0] }; }},
   // ---- reacting to the others ----
   laugh:{T:1.9, f:t=>{ const o=bump(t,0,.15,1.4,1.85), sh=Math.abs(Math.sin(t*18));
     return { chest:[(0.18+0.08*sh)*o,0,0], head:[(0.25-0.1*sh)*o,0,0], lArm:[0.6*o,-0.2*o], rArm:[0.6*o,-0.2*o], sq:0.03*sh*o }; }},
@@ -938,6 +1009,15 @@ def({id:'bat', cat:'held', name:'Knuppel', qty:1, variants:[{n:'Maple',c:0xc98a4
   build:v=>{ const c=v.c, g=0x1d1d22; return {anchor:'rhand', offset:[0,1,0.4], rotX:-0.45, boxes:[
     [-0.9,-0.9,-2.4,0.9,0.9,-1.5,g],[-0.55,-0.55,-1.5,0.55,0.55,5,g],[-0.6,-0.6,5,0.6,0.6,7,c],[-0.8,-0.8,7,0.8,0.8,10,c],[-1.0,-1.0,10,1.0,1.0,16.5,c]]}; }});
 
+// skill tree only: an open book, held by its near edge
+def({id:'book', cat:'held', name:'Boek', hidden:true, variants:[{n:'Blauw',c:0x2f5fb8,c2:0xf6f1e4}],
+  build:v=>{ const c=v.c, p=v.c2, ln=0xb9b4a8, b=[
+    [-4.7,-3.4,-0.35,4.7,3.4,0.15,c],                       // cover
+    [-4.4,-3.1,0.15,-0.2,3.1,1.0,p],[0.2,-3.1,0.15,4.4,3.1,1.0,p],   // pages
+    [-0.2,-3.1,0.15,0.2,3.1,0.55,darker(c,0.7)]];           // spine groove
+    for (let i=0;i<5;i++){ const y=-2.2+i*1.1; b.push([-3.8,y,1.0,-0.8,y+0.28,1.06,ln],[0.8,y,1.0,3.8,y+0.28,1.06,ln]); }
+    return {anchor:'rhand', offset:[4.2,-1.4,1.4], boxes:b}; }});
+
 // built for Steve's square block head / torso: hidden until there are versions for the template
 for (const it of ITEMS) if (it.cat==='hair' || it.cat==='acc' || (it.cat==='hat' && it.build)) it.hidden = true;
 for (const c of CATS) if (c.id==='hair' || c.id==='acc') c.hidden = true;
@@ -1156,9 +1236,11 @@ function refreshTexture(){
   mainRig.glowCtx.putImageData(m,0,0); mainRig.glowTex.needsUpdate = true;
 }
 
+const BOOK = new WeakMap();   // outfit -> held item shown instead of o.held (skill tree book swap)
+const heldOf = o => BOOK.get(o) ?? o.held;
 function voxelKeys(o){
   const keys = {};
-  for (const s of ['hair','hat','held']){ const it=ITEM[o[s]]; if (it && it.build) keys[s] = it.id+'#'+variantOf(o,it.id); }
+  for (const s of ['hair','hat','held']){ const it=ITEM[s==='held' ? heldOf(o) : o[s]]; if (it && it.build) keys[s] = it.id+'#'+variantOf(o,it.id); }
   for (const id of Object.keys(o.acc)) keys['acc:'+id] = id+'#'+variantOf(o,id);
   return keys;
 }
@@ -1168,9 +1250,9 @@ function syncVoxels(rig, o, mat, animate){
   for (const [k,sig] of Object.entries(want)){
     if (rig.attached[k]) continue;
     const id = sig.split('#')[0], it = ITEM[id];
-    const h = attachItem(rig,k,it,it.variants[variantOf(o,id)],mat);
+    const h = attachItem(rig,k,it,it.variants[variantOf(o,id)] || it.variants[0],mat);
     h.userData.sig = sig;
-    if (animate){ h.userData.pop = 0; h.userData.pxGroup.scale.setScalar(0.0001); spawnBurst(h, it.variants[variantOf(o,id)]); }
+    if (animate){ h.userData.pop = 0; h.userData.pxGroup.scale.setScalar(0.0001); spawnBurst(h, it.variants[variantOf(o,id)] || it.variants[0]); }
     else h.userData.pop = 1;
   }
 }
@@ -1564,6 +1646,9 @@ const SAY = {
   stuck:  ['Tadaa!','Geland!','Tien punten','Als een kat','Easy','Ja jonge!','Perfect','Hup!'],
   land:   ['Au..','Ik ben oké','Niet chill','Gast, waarom?','Mijn rug..','Dat deed pijn','Oké oké','Wat was dat?'],
   float:  ['Ik vlieg!','Woooo','Waar is boven?','Gast ik zweef','Dit is ziek','Astronaut nu','Zwaartekracht? Nooit van gehoord'],
+  think:  ['Hmm…','Even denken…','Wat zal ik leren?','Behulpzaam ben ik al wel','Communicatie… lastig hoor','Grapjes lijkt me vet','Boosheid? Ik?','Hmm, Verliefdheid…','Wat is de volgende stap?','Ik kan dit','Moeilijk hoor','Oké, focus','Waar moet ik op letten?'],
+  book:   ['Even lezen…','Ah, een boek','Eens kijken wat hier staat','Interessant…'],
+  aha:    ['Aha!','Ik weet het!','Oh wacht!','Ja, dat is het!','Ding!'],
   laugh:  ['Hahaha','Haha gast','HAHAHA wollah','Ik lig dubbel','Hahaha nee man'],
   cheer:  ['Yes!','Mooi!','Lets gooo','Ja jonge!','Toppie'],
   hello:  ['Yo!','Ewa!','Hoi hoi','Wie ben jij?','Welkom mattie','Hé!'],
@@ -1572,7 +1657,7 @@ const SAY = {
 const LOUD = new Set(['dangle','float','bumped']);
 const bubbleLayer = $('#bubbles');
 function say(c, cat, force=false){
-  if (SKT.open && c!==active) return;   // the others are hidden on the skill screen
+  if (SKT.open) return;   // skill screen: no lines, just the reading dots
   if (!SET.bubbles) return;
   const t = nowS();
   if (!c || !c.turntable.visible) return;
@@ -1603,6 +1688,13 @@ function updateBubbles(){
     b.el.style.transform = `translate(${x}px,${y}px) translate(-50%,-100%) translateX(${b.side*14}px) scale(${Math.max(0.01,pop)*(0.85+0.15*out)}) rotate(${b.side*-2}deg)`;
   }
 }
+function showDots(c, dur){
+  if (!SET.bubbles || !c.turntable.visible) return;
+  if (!c.bubble) c.bubble = { el:document.createElement('div') };
+  const b = c.bubble; b.el.className = 'bub dots'; b.el.innerHTML = '<i></i><i></i><i></i>'; b.el.setAttribute('aria-label', 'leest');
+  if (!b.el.parentNode) bubbleLayer.appendChild(b.el);
+  const t = nowS(); b.t0 = t; b.until = t + dur; b.side = 1;
+}
 function removeBubble(c){ if (c.bubble) c.bubble.el.remove(); }
 let lastInput = nowS();
 for (const ev of ['pointerdown','keydown','wheel']) addEventListener(ev, ()=>{ lastInput = nowS(); }, {capture:true, passive:true});
@@ -1613,6 +1705,60 @@ function othersWatch(c, dur=[1.6,2.8], maxDelay=0.45){
 }
 // queue a clip on another character (react() only works on the bound one)
 function cue(o, key, delay=0, amp=1){ o.pending = { key, at: nowS() + delay, amp }; }
+/* ---- skill tree book swap: crouch, put the item on the floor, a book pops into the hand; reversed on the way out ---- */
+const floorProps = [];
+function dropHeld(c){   // move the held item from the hand into the world and let it fall
+  const h = mainRig.attached.held; if (!h) return;
+  delete mainRig.attached.held; scene.attach(h);
+  const yaw = new THREE.Euler().setFromQuaternion(turntable.getWorldQuaternion(new THREE.Quaternion()), 'YXZ').y;
+  h.userData.floor = { c, vy:0, q:new THREE.Quaternion().setFromEuler(new THREE.Euler(0, yaw + 0.5, 0)).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(0,0,0))) };
+  h.userData.removing = false; c.prop = h; floorProps.push(h);
+}
+function removeProp(c, puff){
+  const h = c.prop; if (!h) return; c.prop = null;
+  const i = floorProps.indexOf(h); if (i>=0) floorProps.splice(i,1);
+  if (puff) spawnAt(h.getWorldPosition(new THREE.Vector3()), [0xffffff,0xe9eef5], 10, 0.6);
+  scene.remove(h); disposeTree(h);
+}
+const _propBox = new THREE.Box3();
+function updateFloorProps(dt){
+  for (const h of floorProps){ const f = h.userData.floor;
+    h.quaternion.slerp(f.q, 1-Math.exp(-9*dt));
+    f.vy -= 14*dt; h.position.y += f.vy*dt;
+    h.updateMatrixWorld(true); _propBox.setFromObject(h);
+    const gy = groundAt(h.position.x, h.position.z);
+    if (_propBox.min.y < gy){ h.position.y += gy-_propBox.min.y; f.vy = f.vy < -1.5 ? -f.vy*0.25 : 0; }
+  }
+}
+function bookSwap(c, now){
+  const want = SKT.open && c===active && c.appear >= 1;
+  const free = RAG.state==='off' && !c.mv;
+  const q = c.bookSeq;
+  if (want && !c.book && !q && free && now > (c.bookWait||0)){
+    const has = !!ITEM[outfit.held]?.build;
+    c.bookSeq = { k:'down', t0:now, has, dropped:false };
+    if (has) react('putdown', 1);
+    return;
+  }
+  if (!q){
+    if (!want && c.book){ c.book = false; c.bookSeq = { k:'up', t0:now, has:!!c.prop, swapped:false }; if (c.prop) react('putdown', 1); }
+    return;
+  }
+  const t = now - q.t0;
+  if (q.k==='down'){
+    if (!want){   // left before it finished: snap back
+      removeProp(c, false); BOOK.delete(outfit); syncVoxels(mainRig, outfit, voxMat, false); c.bookSeq = null; c.book = false; return; }
+    if (q.has && !q.dropped && t >= 0.62){ q.dropped = true; BOOK.set(outfit, 'held-none'); dropHeld(c); syncVoxels(mainRig, outfit, voxMat, false); }
+    if (t >= (q.has ? 1.45 : 0.15)){
+      BOOK.set(outfit, 'book'); syncVoxels(mainRig, outfit, voxMat, true);
+      c.book = true; c.bookSeq = null; c.fidgetAt = now + 1.2;
+      c.dotsAt = now + 1.2;
+    }
+  } else if (q.k==='up'){
+    if (!q.bookGone && t >= 0.05){ q.bookGone = true; BOOK.set(outfit, 'held-none'); syncVoxels(mainRig, outfit, voxMat, true); }
+    if (t >= (q.has ? 0.62 : 0.1)){ removeProp(c, false); BOOK.delete(outfit); syncVoxels(mainRig, outfit, voxMat, false); c.bookSeq = null; }
+  }
+}
 function updateChar(dt, now){
   const c = bound;
   if (c.appear < 1){
@@ -1640,12 +1786,17 @@ function updateChar(dt, now){
   if (now > c.chatAt && c.appear >= 1){
     if (RAG.state==='grab'){ say(c, 'dangle', true); c.chatAt = now + rand(2.2, 3.6); }
     else if (RAG.state==='fall' && zeroG){ if (Math.random()<0.5) say(c, 'float'); c.chatAt = now + rand(7, 14); }
-    else if (RAG.state==='off' && !c.mv){ if (Math.random()<0.75) say(c, 'idle'); else c.chatAt = now + rand(6, 12); }
+    else if (RAG.state==='off' && !c.mv){ if (Math.random()<0.75) say(c, SKT.open ? 'think' : 'idle'); else c.chatAt = now + rand(6, 12); }
     else c.chatAt = now + rand(2, 4);
   }
   // idle fidgets: only after a few seconds without input, and only when he's free
   if (c.fidgetAt === undefined) c.fidgetAt = now + rand(3, 9);
-  if (now - lastInput > 4 && now > c.fidgetAt && !c.mv && RAG.state==='off' && c.appear >= 1 && !(REACT[reactS.key] && reactS.t < REACT[reactS.key].T)){
+  bookSwap(c, now);
+  if (c.book && SKT.open && c===active && now > (c.dotsAt||0)){ showDots(c, rand(4.5, 6.5)); c.dotsAt = c.bubble ? c.bubble.until + rand(2, 3.5) : now + 3; }
+  if (!SKT.open && c.bubble && c.bubble.el.classList.contains('dots') && c.bubble.until > now + 0.1) c.bubble.until = now;
+  if (c.sayAt && now >= c.sayAt){ c.sayAt = 0; if (SKT.open) say(c, c.sayCat, true); }
+  const thinking = SKT.open && c===active;
+  if (!thinking && now - lastInput > 4 && now > c.fidgetAt && !c.mv && RAG.state==='off' && c.appear >= 1 && !(REACT[reactS.key] && reactS.t < REACT[reactS.key].T)){
     c.fidgetAt = now + rand(5, 11);
     const others = chars.filter(o=>o!==c && o.turntable.visible), r = Math.random();
     if (others.length && r < 0.25){ const o = others[Math.floor(Math.random()*others.length)]; c.watch = { c:o, from:now, until:now+rand(1.5,2.8) }; if (Math.random()<0.4) cue(o, 'wave', 0.6, 0.8); }
@@ -1937,22 +2088,100 @@ const LOCK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-widt
 const SKT = { h:0, built:false, open:false, sel:'help', off:0, offA:-1 };
 const skById = id => { for (const s of SKILLS){ if (s.id===id) return s; for (const l of s.next) if (l.id===id) return {...l, locked:true, parent:s}; } };
 function selectSkill(id){
-  SKT.sel = id; const s = skById(id);
+  SKT.sel = id;
   document.querySelectorAll('#skills .skT').forEach(b=>{ b.classList.toggle('sel', b.dataset.id===id); b.setAttribute('aria-pressed', b.dataset.id===id); });
-  $('#skTitle').textContent = s.name;
-  $('#skInfo').classList.toggle('locked', !!s.locked);
-  $('#skState').textContent = s.locked ? 'Nog niet beschikbaar' : 'Voortgang';
-  $('#skPct').innerHTML = s.locked ? LOCK_SVG.replace('<svg ', '<svg style="width:16px;height:16px;vertical-align:-2px" ') : s.pct+'%';
+}
+// double-click: open one skill big (grows out of the tile it came from)
+function focusSkill(id, fromEl){
+  const s = skById(id), f = $('#skFocus'); selectSkill(id);
+  f.classList.toggle('locked', !!s.locked);
+  const col = s.locked ? s.parent : s; f.style.setProperty('--c', col.c); f.style.setProperty('--c2', col.c2);
+  $('#skFIc').style.background = s.locked ? '' : s.bg; $('#skFIc').innerHTML = `<svg viewBox="0 0 24 24">${SKILL_IC[id]}</svg>`;
+  $('#skFName').textContent = s.name;
+  $('#skFChip').textContent = s.locked ? 'Op slot' : 'Ontgrendeld';
+  $('#skFMeter').style.display = s.locked ? 'none' : '';
+  $('#skFText').innerHTML = s.locked ? `Nog niet beschikbaar. Deze vaardigheid groeit uit <b>${s.parent.name}</b>.`
+                                     : `Leidt naar: <b>${s.next.map(l=>l.name).join('</b> en <b>')}</b>.`;
+  $('#skFBar').style.width = '0%'; $('#skFPct').textContent = '0%';
+  if (fromEl){ const r = fromEl.getBoundingClientRect(), fr = f.getBoundingClientRect(); f.style.transformOrigin = `${r.left+r.width/2-fr.left}px ${r.top+r.height/2-fr.top}px`; }
+  f.classList.add('open'); SKT.focus = id;
+  if (!s.locked) setTimeout(()=>{ if (SKT.focus!==id) return; $('#skFBar').style.width = s.pct+'%';
+    const t0 = performance.now(); const tick = now=>{ const k=Math.min(1,(now-t0)/900), e=1-Math.pow(1-k,3); $('#skFPct').textContent = Math.round(s.pct*e)+'%'; if (k<1 && SKT.focus===id) requestAnimationFrame(tick); }; requestAnimationFrame(tick); }, 180);
+  setTimeout(()=>$('#skFocusX').focus({preventScroll:true}), 200);
+}
+function unfocusSkill(){ if (!SKT.focus) return; const id = SKT.focus; SKT.focus = null; $('#skFocus').classList.remove('open'); $(`#skills .skT[data-id="${id}"]`)?.focus({preventScroll:true}); }
+/* ---- endless filler: deterministic per row index, so scrolling back shows the same skills ---- */
+const FILL_IC = {
+  star:'<path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1 5.8-5.2-2.8-5.2 2.8 1-5.8-4.3-4.1 5.9-.8z" fill="#ffd335" stroke="#1f2636" stroke-width="2" stroke-linejoin="round"/>',
+  puzzle:'<path d="M5 8h4a2 2 0 1 1 4 0h4v4a2 2 0 1 1 0 4v4H5v-4a2 2 0 1 0 0-4z" fill="#8fd17a" stroke="#1f2636" stroke-width="2" stroke-linejoin="round"/>',
+  people:'<circle cx="8.5" cy="9" r="3" fill="#ffb37a" stroke="#1f2636" stroke-width="2"/><circle cx="15.5" cy="9" r="3" fill="#7fb5ff" stroke="#1f2636" stroke-width="2"/><path d="M3 20c.5-3.5 2.6-5 5.5-5s5 1.5 5.5 5M10 20c.5-3.5 2.6-5 5.5-5s5 1.5 5.5 5" fill="none" stroke="#1f2636" stroke-width="2" stroke-linecap="round"/>',
+  ear:'<path d="M8 10a5 5 0 1 1 9 3c-1.5 1.8-3 2.4-3 4.5a2.5 2.5 0 0 1-5 0" fill="#ffd2b8" stroke="#1f2636" stroke-width="2" stroke-linecap="round"/><path d="M11 10a2 2 0 1 1 3 1.7" fill="none" stroke="#1f2636" stroke-width="2" stroke-linecap="round"/>',
+  clock:'<circle cx="12" cy="12" r="8.5" fill="#fff" stroke="#1f2636" stroke-width="2.2"/><path d="M12 7v5l3.5 2" fill="none" stroke="#1f2636" stroke-width="2.2" stroke-linecap="round"/>',
+  bulb:'<path d="M12 3.5a6 6 0 0 1 3.5 10.9V17h-7v-2.6A6 6 0 0 1 12 3.5z" fill="#fff3a6" stroke="#1f2636" stroke-width="2" stroke-linejoin="round"/><path d="M9.5 20h5" stroke="#1f2636" stroke-width="2.2" stroke-linecap="round"/>',
+  hands:'<path d="M4 14l4-4 3 2 3-2 6 4-5 5h-6z" fill="#ffd2b8" stroke="#1f2636" stroke-width="2" stroke-linejoin="round"/>',
+  flag:'<path d="M6 21V4M6 5h11l-2.5 3.5L17 12H6" fill="#ff7a5c" stroke="#1f2636" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>',
+  ...SKILL_IC };
+const FILL_KEYS = Object.keys(FILL_IC);
+const FILL_GROUPS = ['Samen','Gevoel','Zelf','School','Vrije tijd','Thuis','Vrienden','Lichaam','Buiten','Online'];
+const FILL_NAMES = ['Luisteren','Samenwerken','Geduld','Eerlijkheid','Doorzetten','Empathie','Zelfvertrouwen','Creativiteit','Nieuwsgierigheid','Vriendschap','Respect','Verantwoordelijkheid','Plannen','Concentratie','Moed','Delen','Troosten','Sorry zeggen','Grenzen aangeven','Vragen stellen','Hulp vragen','Afspraken nakomen','Tegen je verlies','Rustig blijven','Complimenten','Opruimen','Uitleggen','Durven','Volhouden','Kalmte','Humor','Dankbaarheid','Aandacht','Vertrouwen','Nee zeggen','Initiatief'];
+const rng = seed => () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+function fillRow(i){
+  const r = rng(i*7919 + 13), n = 2 + (r()<0.55 ? 1 : 0) + (r()<0.3 ? 1 : 0), row = document.createElement('div');
+  row.className = 'skRowF'; row.dataset.i = i; row.style.gridTemplateColumns = `repeat(${n},1fr)`; row.setAttribute('aria-hidden','true');
+  for (let p=0;p<n;p++){
+    const panel = document.createElement('div'); panel.className = 'skPanel';
+    panel.innerHTML = `<span class="pt px">${FILL_GROUPS[Math.floor(r()*FILL_GROUPS.length)]}</span>`;
+    const k = n>=4 ? 2 : 2 + (r()<0.4 ? 1 : 0);
+    for (let j=0;j<k;j++){
+      const t = document.createElement('div'); t.className = 'skT lock';
+      t.innerHTML = `<div class="hx"><svg viewBox="0 0 24 24">${FILL_IC[FILL_KEYS[Math.floor(r()*FILL_KEYS.length)]]}</svg><span class="ct">${LOCK_SVG}</span></div><span class="nm">${FILL_NAMES[Math.floor(r()*FILL_NAMES.length)]}</span>`;
+      t.onclick = ()=>{ if (SKT.dragged) return; t.classList.remove('shake'); void t.offsetWidth; t.classList.add('shake'); };
+      panel.appendChild(t);
+    }
+    row.appendChild(panel);
+  }
+  return row;
+}
+const FILL = { up:0, down:0 };
+function growUp(n){   // add rows on top without moving what's on screen
+  const v = $('#skView'), h0 = v.scrollHeight;
+  for (let k=0;k<n;k++) $('#skUp').prepend(fillRow(-(++FILL.up)));
+  v.scrollTop += v.scrollHeight - h0;
+}
+function growDown(n){ for (let k=0;k<n;k++) $('#skDown').append(fillRow(++FILL.down)); }
+function skillScroll(){
+  if (SKT.intro) return;
+  const v = $('#skView'), z = layoutZ || 1;
+  if (v.scrollTop < 700*z){ growUp(3); drawSkillLines(); }
+  if (v.scrollTop + v.clientHeight > v.scrollHeight - 700*z){ growDown(3); }
+}
+// fly-by: start high up in the tree, rush down through the rows and ease onto the unlocked skills
+function skillIntro(){
+  const v = $('#skView');
+  const target = ()=>{ const vr = v.getBoundingClientRect(), br = $('#skBase').getBoundingClientRect(); return v.scrollTop + (br.bottom - vr.bottom) + 170*(layoutZ||1); };
+  const end = target(), start = Math.max(0, end - 3600*(layoutZ||1));
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reduce){ v.scrollTop = end; return; }
+  SKT.intro = true; v.scrollTop = start; const t0 = performance.now(), dur = 1900;
+  const stop = ()=>{ SKT.intro = false; v.removeEventListener('wheel', stop); v.removeEventListener('pointerdown', stop); };
+  v.addEventListener('wheel', stop, {passive:true}); v.addEventListener('pointerdown', stop);
+  const tick = now=>{ if (!SKT.intro || !SKT.open) return stop();
+    const k = Math.min(1, (now-t0)/dur), e = 1 - Math.pow(1-k, 4);
+    v.scrollTop = start + (end-start)*e;
+    v.style.filter = k < 0.75 ? `blur(${(1-e)*2.2}px)` : '';
+    if (k < 1) requestAnimationFrame(tick); else { v.style.filter = ''; stop(); } };
+  requestAnimationFrame(tick);
 }
 function buildSkills(){
   if (SKT.built) return; SKT.built = true;
-  const base = $('#skBase'), brs = $('#skBranches');
+  const base = $('#skBase'), brs = $('#skBranches'), gh = $('#skGhosts');
+  const tile = (b, id) => { b.addEventListener('dblclick', e=>{ e.preventDefault(); focusSkill(id, b); }); b.addEventListener('keydown', e=>{ if (e.key==='Enter' && e.shiftKey){ e.preventDefault(); focusSkill(id, b); } }); };
   for (const s of SKILLS){
     const b = document.createElement('button'); b.className = 'skT'; b.dataset.id = s.id;
     b.style.setProperty('--c', s.c); b.style.setProperty('--c2', s.c2);
     b.innerHTML = `<div class="hx" style="background:${s.bg}"><svg viewBox="0 0 24 24">${SKILL_IC[s.id]}</svg><span class="ct">0%</span></div><span class="nm">${s.name}</span>
       <div class="bar" role="meter" aria-label="${s.name}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${s.pct}"><i></i></div>`;
-    b.onclick = ()=>selectSkill(s.id);
+    b.onclick = ()=>{ if (!SKT.dragged) selectSkill(s.id); }; tile(b, s.id);
     base.appendChild(b);
     const p = document.createElement('div'); p.className = 'skPanel br'; p.dataset.parent = s.id;
     p.innerHTML = `<span class="pt px">${s.name}</span>`;
@@ -1960,22 +2189,35 @@ function buildSkills(){
       const t = document.createElement('button'); t.className = 'skT lock'; t.dataset.id = l.id;
       t.setAttribute('aria-label', l.name+', nog niet beschikbaar');
       t.innerHTML = `<div class="hx"><svg viewBox="0 0 24 24">${SKILL_IC[l.id]}</svg><span class="ct">${LOCK_SVG}</span></div><span class="nm">${l.name}</span>`;
-      t.onclick = ()=>{ selectSkill(l.id); t.classList.remove('shake'); void t.offsetWidth; t.classList.add('shake'); };
+      t.onclick = ()=>{ if (SKT.dragged) return; selectSkill(l.id); t.classList.remove('shake'); void t.offsetWidth; t.classList.add('shake'); }; tile(t, l.id);
       p.appendChild(t);
+      // what comes after it is still unknown: a dashed placeholder panel
+      const g = document.createElement('div'); g.className = 'skPanel ghost'; g.dataset.from = l.id; g.setAttribute('aria-hidden','true');
+      g.innerHTML = '<span class="pt px">???</span><i>?</i><i>?</i>'; gh.appendChild(g);
     }
     brs.appendChild(p);
   }
+  growDown(4); { const v = $('#skView'); for (let k=0;k<14;k++) $('#skUp').prepend(fillRow(-(++FILL.up))); v.addEventListener('scroll', skillScroll, {passive:true}); }
   $('#skCount').textContent = SKILLS.length+'/'+SKILLS.reduce((n,s)=>n+1+s.next.length,0);
   $('#skBack').onclick = closeSkills; $('#skTabChar').onclick = closeSkills;
+  $('#skFocusX').onclick = unfocusSkill; $('#skFocus').addEventListener('dblclick', unfocusSkill);
   addEventListener('resize', ()=>{ if (SKT.open) drawSkillLines(); });
+  // drag to pan (mouse wheel / touch scroll work as normal)
+  const v = $('#skView'); let d = null;
+  v.addEventListener('pointerdown', e=>{ if (e.button!==0 || e.pointerType==='touch') return; d = { x:e.clientX, y:e.clientY, l:v.scrollLeft, t:v.scrollTop, id:e.pointerId }; SKT.dragged = false; });
+  addEventListener('pointermove', e=>{ if (!d) return; const dx = e.clientX-d.x, dy = e.clientY-d.y;
+    if (!SKT.dragged && Math.hypot(dx,dy) > 5){ SKT.dragged = true; v.classList.add('drag'); }
+    if (SKT.dragged){ v.scrollLeft = d.l - dx; v.scrollTop = d.t - dy; } });
+  addEventListener('pointerup', ()=>{ if (!d) return; d = null; v.classList.remove('drag'); setTimeout(()=>SKT.dragged = false, 0); });
 }
 function drawSkillLines(){
   const box = $('#skTree').getBoundingClientRect(), z = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--z'))||1;
-  const P = (el, side)=>{ const r = el.getBoundingClientRect(); return [(r.left + r.width/2 - box.left)/z, ((side==='b' ? r.bottom + 8 : r.top - 2) - box.top)/z]; };
+  const P = (el, side)=>{ const r = el.getBoundingClientRect(); return [(r.left + r.width/2 - box.left)/z, ((side==='b' ? r.bottom + 8 : r.top - 4) - box.top)/z]; };
+  const up = (a, b, cls) => { const [x1,y1] = a, [x2,y2] = b, my = (y1+y2)/2; return `<path class="${cls}" d="M${x1} ${y1}V${my}H${x2}V${y2}"/>`; };
   let d = '';
   for (const s of SKILLS){
-    const [x1,y1] = P($(`#skBase [data-id="${s.id}"] .bar`), 'b'), [x2,y2] = P($(`#skBranches [data-parent="${s.id}"]`), 't');
-    const my = (y1+y2)/2; d += `<path class="off" d="M${x1} ${y1}V${my}H${x2}V${y2}"/>`;
+    d += up(P($(`#skBase [data-id="${s.id}"] .hx`), 't'), P($(`#skBranches [data-parent="${s.id}"]`), 'b'), 'off');
+    for (const l of s.next) d += up(P($(`#skBranches [data-id="${l.id}"] .hx`), 't'), P($(`#skGhosts [data-from="${l.id}"]`), 'b'), 'ghost');
   }
   $('#skLines').innerHTML = d;
 }
@@ -1984,17 +2226,18 @@ function openSkills(){
   const n = $('#name').value.trim(); $('#skNameT').textContent = n || 'Karakter';
   const sk = $('#skills'); sk.classList.add('open'); sk.setAttribute('aria-hidden','false'); SKT.open = true;
   document.documentElement.classList.add('skillmode');
-  goShot('totaal', {keepAuto:true}); zoomT = 0;   // full-body framing, scroll zoom reset
+  goShot('totaal', {keepAuto:true}); zoomT = 0; if (active) active.fidgetAt = nowS() + 2.2;   // full-body framing, scroll zoom reset
   selectSkill(SKT.sel);
   for (const b of document.querySelectorAll('#skBase .skT')){ b.querySelector('.bar i').style.width = '0%'; b.querySelector('.ct').textContent = '0%'; }
-  requestAnimationFrame(()=>{ drawSkillLines(); setTimeout(()=>{
+  unfocusSkill();
+  requestAnimationFrame(()=>{ drawSkillLines(); const v = $('#skView'); { const vr = v.getBoundingClientRect(), br = $('#skBase').getBoundingClientRect(); v.scrollLeft += (br.left + br.width/2) - (vr.left + vr.width/2); } skillIntro(); setTimeout(()=>{
     for (const s of SKILLS){
       const b = $(`#skBase [data-id="${s.id}"]`); b.querySelector('.bar i').style.width = s.pct+'%';
       const t0 = performance.now(), pc = b.querySelector('.ct');
       const tick = now => { const k = Math.min(1,(now-t0)/1200), e = 1-Math.pow(1-k,3); pc.textContent = Math.round(s.pct*e)+'%'; if (k<1 && SKT.open) requestAnimationFrame(tick); };
       requestAnimationFrame(tick);
     }
-  }, 300); });
+  }, 1500); });
   setTimeout(()=>$('#skBack').focus({preventScroll:true}), 450);
 }
 function closeSkills(){
@@ -2021,7 +2264,7 @@ $('#optBub').onchange = e=>{ SET.bubbles = e.target.checked; if (!SET.bubbles) f
 $('#name').addEventListener('input', ()=>{ if (active) active.name = $('#name').value; save(); });
 $('#name').addEventListener('keydown', e=>{ if(e.key==='Enter') e.target.blur(); e.stopPropagation(); });
 addEventListener('keydown', e=>{
-  if (SKT.open){ if (e.key==='Escape'||e.key==='q'||e.key==='Q') closeSkills(); return; }   // creator shortcuts are off on the skill tree
+  if (SKT.open){ if (e.key==='Escape' && SKT.focus) unfocusSkill(); else if (e.key==='Escape'||e.key==='q'||e.key==='Q') closeSkills(); return; }   // creator shortcuts are off on the skill tree
   if (e.target.tagName==='INPUT') return;
   const mod = e.ctrlKey||e.metaKey;
   if (mod && e.key.toLowerCase()==='z'){ e.preventDefault(); (e.shiftKey? $('#redo') : $('#undo')).click(); return; }
@@ -2570,6 +2813,9 @@ let glow = 0, holdW = 0;
 const DICE_CLIPS = ['cheer','twirl','flex','dab','bow','shimmy','jacks','model']; let lastDice = 'cheer';
 const CLOTHING_CLIPS = new Set(['hair','hat','top','bottom','shoes','shades','chain','backpack','scarf','football','brick','bat']);
 const FIDGETS = ['stretch','lookaround','scratch','shift','tap','yawn'];
+const THINK_CLIPS = ['chin','ponder','temple','glance','hmm','count','scratch'];
+const BOOK_CLIPS = ['read','read','glance','ponder','hmm','temple'];   // with the book: mostly reading   // skill tree idles
+let lastThink = '';
 function react(key, amp=1){ if (!SET.react && CLOTHING_CLIPS.has(key)) return; reactS.t=0; reactS.key=key; reactS.amp=amp; }
 const raycaster = new THREE.Raycaster(); const plane = new THREE.Plane();
 let blink = { next:3, until:0, on:false };
@@ -2582,7 +2828,7 @@ function proceduralPose(dt, now){
   if (look.target===1 && (now>look.until || now-mouse.lastMove>7 || !mouse.inside)){ look.target=0; look.next=now+rand(3.5,9); look.cooldown=now+1.5; }
   const W = bound.watch, getup = !!(bound.mv && bound.mv.type==='getup');
   const watching = !!(W && now >= W.from && now < W.until && chars.includes(W.c) && W.c.turntable.visible && !getup);
-  const mouseLook = SET.look && look.target && !spin.drag && !press.on && !mouse.overUI && !getup;
+  const mouseLook = SET.look && look.target && !(bound.bookW > 0.3) && !spin.drag && !press.on && !mouse.overUI && !getup;
   const wantW = (watching || mouseLook) ? 1 : 0;
   look.w = damp(look.w, wantW, wantW? 2.2 : (mouse.overUI? 3.5 : 1.6), dt);
 
@@ -2623,17 +2869,23 @@ function proceduralPose(dt, now){
   bounce.position.y = (o.hop||0)*w + bound.lift;
 
   // persistent hold pose when carrying something
-  holdW = damp(holdW, ITEM[outfit.held]?.build ? 1 : 0, 4, dt);
+  holdW = damp(holdW, ITEM[heldOf(outfit)]?.build ? 1 : 0, 4, dt);
+  bound.bookW = damp(bound.bookW||0, heldOf(outfit)==='book' ? 1 : 0, 4, dt); const bw = bound.bookW*(1-w);   // reading pose
+  const scan = bw*(0.07*Math.sin(now*0.55) + 0.025*Math.sin(now*1.7)), breathe = bw*0.02*Math.sin(now*1.1);
 
   // --- apply (parents first). Reactions take over the head from cursor-watching while they play.
   const lookK = 1 - Math.min(1, w*1.4);
   premulChar(B.Chest, new THREE.Quaternion().setFromEuler(new THREE.Euler(g('chest',0), look.yaw*0.22*lookK + g('chest',1), g('chest',2), 'YXZ')));
-  premulChar(B.Head,  new THREE.Quaternion().setFromEuler(new THREE.Euler(-(look.pitch*lookK + g('head',0)), look.yaw*0.8*lookK + g('head',1), g('head',2), 'YXZ')));
+  premulChar(B.Head,  new THREE.Quaternion().setFromEuler(new THREE.Euler(-(look.pitch*lookK + g('head',0) - 0.5*bw + breathe), look.yaw*0.8*lookK + g('head',1) + scan, g('head',2) + 0.06*bw, 'YXZ')));
   const L = mirrored ? -1 : 1;
-  premulChar(B.Left_Arm,  new THREE.Quaternion().setFromEuler(new THREE.Euler(-g('lArm',0), 0,  L*g('lArm',1))));
-  premulChar(B.Right_Arm, new THREE.Quaternion().setFromEuler(new THREE.Euler(-(g('rArm',0) + holdW*0.32*(1-w)), 0, -L*g('rArm',1))));
+  premulChar(B.Left_Arm,  new THREE.Quaternion().setFromEuler(new THREE.Euler(-(g('lArm',0) + 0.42*bw), 0,  L*(g('lArm',1) - 0.3*bw))));
+  premulChar(B.Right_Arm, new THREE.Quaternion().setFromEuler(new THREE.Euler(-(g('rArm',0) + holdW*0.32*(1-w) + 0.1*bw), 0, -L*(g('rArm',1) - 0.3*bw))));
   if (o.lLeg || mp.lLeg) premulChar(B.Left_Leg,  new THREE.Quaternion().setFromEuler(new THREE.Euler(-g('lLeg',0), 0,  L*g('lLeg',1))));
   if (o.rLeg || mp.rLeg) premulChar(B.Right_Leg, new THREE.Quaternion().setFromEuler(new THREE.Euler(-g('rLeg',0), 0, -L*g('rLeg',1))));
+  if (B.Left_Elbow){
+    if (o.lElb || bw > 0.001) premulChar(B.Left_Elbow,  new THREE.Quaternion().setFromEuler(new THREE.Euler(-(g('lElb',0) + 0.8*bw), 0, 0)));
+    if (o.rElb || bw > 0.001) premulChar(B.Right_Elbow, new THREE.Quaternion().setFromEuler(new THREE.Euler(-(g('rElb',0) + 0.8*bw), 0, 0)));
+  }
   if (B.Left_Knee){
     if (o.lKnee || mp.lKnee) premulChar(B.Left_Knee,  new THREE.Quaternion().setFromEuler(new THREE.Euler(g('lKnee',0), 0, 0)));
     if (o.rKnee || mp.rKnee) premulChar(B.Right_Knee, new THREE.Quaternion().setFromEuler(new THREE.Euler(g('rKnee',0), 0, 0)));
@@ -2854,7 +3106,7 @@ function loop(){
   const zk = smooth(0,1,zIn)*(camS.shot==='totaal' ? 0.85 : 0.3);
   camera.lookAt(_dir2.copy(camS.cur.look).lerp(camAhead, zOut).lerp(_chest, zk));
   const f = baseFov*(camS.cur.fovK + (1.05-camS.cur.fovK)*zOut)/(1+zIn*(ZOOM_IN[camS.shot] ?? 1)); if (Math.abs(camera.fov-f)>1e-3){ camera.fov = f; camera.updateProjectionMatrix(); }
-  SKT.off = damp(SKT.off, SKT.open && innerWidth>=820 ? 0.26 : 0, 5, dt); if (SKT.off < 1e-4) SKT.off = 0;
+  SKT.off = damp(SKT.off, SKT.open && innerWidth>=820 ? 0.19 : 0, 5, dt); if (SKT.off < 1e-4) SKT.off = 0;
   if (Math.abs(SKT.off-SKT.offA) > 1e-5){ SKT.offA = SKT.off; camera.setViewOffset(LR.w, LR.h, SKT.off*innerWidth, 0, innerWidth, innerHeight); camera.updateProjectionMatrix(); }
   camera.updateMatrixWorld(true);
   placeArrows(innerWidth, innerHeight, layoutZ);
@@ -2862,6 +3114,7 @@ function loop(){
 
   scene.updateMatrixWorld(true);
   for (const c of chars){ useChar(c); updateChar(dt, now); }
+  updateFloorProps(dt);
   // skill screen: the room fades to white and everyone but the active character pops away
   SKT.white = damp(SKT.white||0, SKT.open ? 1 : 0, 3.2, dt); if (SKT.white < 1e-3) SKT.white = 0;
   ROOM_WHITE.value = smooth(0, 1, SKT.white);
