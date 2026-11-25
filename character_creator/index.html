@@ -264,6 +264,15 @@
     .skT.lock .hx{width:56px;height:56px} .skT.lock .nm{font-size:11.5px} .skPanel{padding:18px 8px 12px}
     #skBack{right:8px;bottom:12px}
   }
+  /* take recorder */
+  #takeBtn.rec{background:#ffe4e4;border-color:var(--red);box-shadow:0 5px 0 #b52424} #takeBtn.rec svg circle{fill:var(--red)}
+  #recPill{position:fixed;z-index:35;left:50%;bottom:96px;transform:translateX(-50%);display:none;align-items:center;gap:12px;padding:8px 10px 8px 16px;background:#fff;border:3px solid var(--ink);border-radius:12px;box-shadow:0 5px 0 var(--ink);font:800 15px Nunito;color:var(--ink);zoom:var(--z)}
+  #recPill.on{display:flex}
+  #recPill i{width:14px;height:14px;border-radius:50%;background:var(--red);animation:recBlink 1s steps(2,start) infinite}
+  #recPill b{font:700 18px "Pixelify Sans",monospace;min-width:64px}
+  #recPill button{border:2.5px solid var(--ink);border-radius:9px;background:var(--red);color:#fff;font:800 13px Nunito;padding:6px 12px;cursor:pointer}
+  @keyframes recBlink{to{visibility:hidden}}
+  #settings select{font:800 13px Nunito;border:2px solid var(--line);border-radius:7px;padding:2px 4px}
   @media (prefers-reduced-motion:reduce){ #toast{transition:none} #skills,#skills.open{transition:none} .skT .bar i{transition:none} }
 </style>
 <script type="importmap">
@@ -308,6 +317,7 @@
   <button class="tbtn box" id="envBtn" title="Omgeving wisselen (E)" aria-label="Omgeving wisselen"><svg viewBox="0 0 24 24" fill="none" stroke="#1f2636" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"><rect x="3" y="4.5" width="18" height="15" rx="2"/><path d="M3 16l5-5 4 4 3-3 6 6"/><circle cx="16" cy="9" r="1.6"/></svg></button>
   <button class="tbtn box" id="shot" title="Screenshot opslaan" aria-label="Screenshot opslaan"><svg viewBox="0 0 24 24" fill="none" stroke="#1f2636" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M4 19h16"/></svg></button>
   <button class="tbtn box" id="export" title="Loadout exporteren (JSON)" aria-label="Loadout exporteren"><svg viewBox="0 0 24 24" fill="none" stroke="#1f2636" stroke-width="2.4" stroke-linejoin="round"><path d="M3 6.5h6.5l2 2H21V19H3z"/></svg></button>
+  <button class="tbtn box" id="takeBtn" title="Take opnemen voor Houdini (T)" aria-label="Take opnemen" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="#1f2636" stroke-width="2.4"><rect x="2.5" y="5" width="13.5" height="14" rx="2.5"/><path d="M16 10.5l5.5-3v9l-5.5-3z" stroke-linejoin="round"/><circle cx="9.2" cy="12" r="2.6" fill="#1f2636" stroke="none"/></svg></button>
   <button class="tbtn box" id="setBtn" title="Instellingen" aria-label="Instellingen" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="#1f2636" stroke-width="2.4" stroke-linecap="round"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2.2"/><circle cx="9" cy="17" r="2.2"/></svg></button>
 </div>
 <div id="settings" class="ui box" role="dialog" aria-label="Instellingen">
@@ -315,6 +325,7 @@
   <label>Reacties op kleding <input type="checkbox" id="optReact" checked></label>
   <label>Diepte-effect camera <input type="checkbox" id="optPar" checked></label>
   <label>Spraakwolkjes <input type="checkbox" id="optBub" checked></label>
+  <label>Houdini take fps <select id="optFps"><option>24</option><option selected>25</option><option>30</option><option>50</option><option>60</option></select></label>
 </div>
 
 <nav id="shots" class="ui box" aria-label="Camerahoeken">
@@ -377,6 +388,7 @@
   <div id="skHint">Dubbelklik op een vaardigheid om hem groot te openen</div>
   <button id="skBack" class="z box px" aria-label="Terug naar karakter"><span class="key">Esc</span>Terug</button>
 </section>
+<div id="recPill" role="status"><i></i><span>Opname</span><b id="recTime">0:00</b><button id="recStop">Stop &amp; exporteer</button></div>
 <div id="toast" class="px">Klaar!</div>
 <div id="loading"><div><div class="t px">Laden…</div><div class="bar"><i id="lbar"></i></div><div class="err" id="lerr"></div></div></div>
 
@@ -1738,7 +1750,8 @@ function bookSwap(c, now){
   const want = SKT.open && c===active && c.appear >= 1;
   const free = RAG.state==='off' && !c.mv;
   const q = c.bookSeq;
-  if (want && !c.book && !q && free && now > (c.bookWait||0)){
+  const busy = REACT[reactS.key] && reactS.t < REACT[reactS.key].T;   // let the Klaar cheer finish first
+  if (want && !c.book && !q && free && !busy && now > (c.bookWait||0)){
     const has = !!ITEM[outfit.held]?.build;
     c.bookSeq = { k:'down', t0:now, has, dropped:false };
     if (has) react('putdown', 1);
@@ -2089,6 +2102,7 @@ const SKILLS = [
     { id:'joke', name:'Grapjes' }, { id:'love', name:'Verliefdheid' } ] },
 ];
 const LOCK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.8" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2" fill="#fff" stroke="none"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>';
+const SKIL_TURN = 1.0;   // how far the character turns toward the tree on the skill screen (radians)
 const SKT = { h:0, built:false, open:false, sel:'help', off:0, offA:-1 };
 const skById = id => { for (const s of SKILLS){ if (s.id===id) return s; for (const l of s.next) if (l.id===id) return {...l, locked:true, parent:s}; } };
 function selectSkill(id){
@@ -2109,11 +2123,12 @@ function focusSkill(id, fromEl){
   $('#skFBar').style.width = '0%'; $('#skFPct').textContent = '0%';
   if (fromEl){ const r = fromEl.getBoundingClientRect(), fr = f.getBoundingClientRect(); f.style.transformOrigin = `${r.left+r.width/2-fr.left}px ${r.top+r.height/2-fr.top}px`; }
   f.classList.add('open'); SKT.focus = id;
+  goShot('portret', {keepAuto:true}); zoomT = 1;   // close-up on the face while a skill is open
   if (!s.locked) setTimeout(()=>{ if (SKT.focus!==id) return; $('#skFBar').style.width = s.pct+'%';
     const t0 = performance.now(); const tick = now=>{ const k=Math.min(1,(now-t0)/900), e=1-Math.pow(1-k,3); $('#skFPct').textContent = Math.round(s.pct*e)+'%'; if (k<1 && SKT.focus===id) requestAnimationFrame(tick); }; requestAnimationFrame(tick); }, 180);
   setTimeout(()=>$('#skFocusX').focus({preventScroll:true}), 200);
 }
-function unfocusSkill(){ if (!SKT.focus) return; const id = SKT.focus; SKT.focus = null; $('#skFocus').classList.remove('open'); $(`#skills .skT[data-id="${id}"]`)?.focus({preventScroll:true}); }
+function unfocusSkill(){ if (!SKT.focus) return; const id = SKT.focus; SKT.focus = null; if (SKT.open){ goShot('totaal', {keepAuto:true}); zoomT = 0; } $('#skFocus').classList.remove('open'); $(`#skills .skT[data-id="${id}"]`)?.focus({preventScroll:true}); }
 /* ---- endless filler: deterministic per row index, so scrolling back shows the same skills ---- */
 const FILL_IC = {
   star:'<path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1 5.8-5.2-2.8-5.2 2.8 1-5.8-4.3-4.1 5.9-.8z" fill="#ffd335" stroke="#1f2636" stroke-width="2" stroke-linejoin="round"/>',
@@ -2162,7 +2177,7 @@ function skillScroll(){
 // fly-by: start high up in the tree, rush down through the rows and ease onto the unlocked skills
 function skillIntro(){
   const v = $('#skView');
-  const target = ()=>{ const vr = v.getBoundingClientRect(), br = $('#skBase').getBoundingClientRect(); return v.scrollTop + (br.bottom - vr.bottom) + 170*(layoutZ||1); };
+  const target = ()=>{ const vr = v.getBoundingClientRect(), br = $('#skBase').getBoundingClientRect(); return v.scrollTop + (br.top + br.height/2) - (vr.top + vr.height*0.52); };   // unlocked skills just below the middle
   const end = target(), start = Math.max(0, end - 3600*(layoutZ||1));
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   if (reduce){ v.scrollTop = end; return; }
@@ -2230,7 +2245,8 @@ function openSkills(){
   const n = $('#name').value.trim(); $('#skNameT').textContent = n || 'Karakter';
   const sk = $('#skills'); sk.classList.add('open'); sk.setAttribute('aria-hidden','false'); SKT.open = true;
   document.documentElement.classList.add('skillmode');
-  goShot('totaal', {keepAuto:true}); zoomT = 0; if (active) active.fidgetAt = nowS() + 2.2;   // full-body framing, scroll zoom reset
+  SKT.prevShot = camS.shot; goShot('totaal', {keepAuto:true}); zoomT = 0;
+  if (active){ const sp = active.spin; SKT.prevSpin = sp.target; sp.target = Math.round((sp.target - SKIL_TURN)/(Math.PI*2))*Math.PI*2 + SKIL_TURN; }   // three-quarter turn toward the tree if (active) active.fidgetAt = nowS() + 2.2;   // full-body framing, scroll zoom reset
   selectSkill(SKT.sel);
   for (const b of document.querySelectorAll('#skBase .skT')){ b.querySelector('.bar i').style.width = '0%'; b.querySelector('.ct').textContent = '0%'; }
   unfocusSkill();
@@ -2247,7 +2263,8 @@ function openSkills(){
 function closeSkills(){
   clearTimeout(SKT.h); const sk = $('#skills'); sk.classList.remove('open'); sk.setAttribute('aria-hidden','true'); SKT.open = false;
   document.documentElement.classList.remove('skillmode');
-  if (camS.auto && curCat) goShot(CAT_SHOT[curCat]||'totaal');
+  goShot(SKT.prevShot || 'totaal', {keepAuto:true});   // back to the view you had before (not the category's auto shot)
+  if (active && SKT.prevSpin !== undefined) active.spin.target = SKT.prevSpin;
   $('#done').focus({preventScroll:true});
 }
 function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'),2200); }
@@ -2268,6 +2285,7 @@ $('#optBub').onchange = e=>{ SET.bubbles = e.target.checked; if (!SET.bubbles) f
 $('#name').addEventListener('input', ()=>{ if (active) active.name = $('#name').value; save(); });
 $('#name').addEventListener('keydown', e=>{ if(e.key==='Enter') e.target.blur(); e.stopPropagation(); });
 addEventListener('keydown', e=>{
+  if ((e.key==='t'||e.key==='T') && !e.ctrlKey && !e.metaKey && e.target.tagName!=='INPUT'){ TAKE.on ? takeStop() : takeStart(); return; }
   if (SKT.open){ if (e.key==='Escape' && SKT.focus) unfocusSkill(); else if (e.key==='Escape'||e.key==='q'||e.key==='Q') closeSkills(); return; }   // creator shortcuts are off on the skill tree
   if (e.target.tagName==='INPUT') return;
   const mod = e.ctrlKey||e.metaKey;
@@ -3054,6 +3072,239 @@ const HAND = (()=>{
 if (!HAND) document.documentElement.classList.remove('hand3d');
 
 /* ============================================================
+   TAKE RECORDER → HOUDINI  (classic /obj scene, no USD / Solaris)
+   Records every frame while on: each visible mesh of the characters (body parts, items, things on the floor) as a
+   rigid piece with its world matrix + colour, the camera (incl. the skill-screen lens shift), the room(s), the
+   confetti / dust particles, the lights, speech bubbles and the mouse. On stop it writes a zip:
+     characters.geo   every piece once, in its own local space (Houdini JSON geo): prim name / part / char, point Cd
+     environment.geo  the grey rooms that were on screen, world space, prim name (= room) / part
+     anim.json        per frame: piece matrices + visibility + tint, camera, rooms, white fade, particles, mouse, lights
+   Import in Houdini 20.5: shelf "VAST" > "Import Character Take" (houdini_tools/vast_cc_houdini.py).
+   Units: 1 = 1 metre (the character is ~1.7 m), Y-up, right-handed, like Houdini. Camera rotate order ZXY.
+   ============================================================ */
+const TAKE = { on:false, t0:0, cam:[], fx:[], env:[], mouse:[], misc:[], pieces:new Map(), order:[], speech:[], seenBub:new WeakMap() };
+const _tm = new THREE.Matrix4(), _tm2 = new THREE.Matrix4(), _tq = new THREE.Quaternion(), _tv = new THREE.Vector3(), _tv2 = new THREE.Vector3(), _tPlane = new THREE.Plane(), _tRay = new THREE.Raycaster();
+const takeTime = () => (performance.now() - TAKE.t0) / 1000;
+function worldVisible(o){ for (let p = o; p; p = p.parent){ if (!p.visible) return false; if (p === scene) return true; } return false; }
+function pieceMatrix(m, out){   // matrix that takes the mesh's own vertex positions to world space (rigid skinning included)
+  if (m.isSkinnedMesh){
+    const bi = m.geometry.attributes.skinIndex ? m.geometry.attributes.skinIndex.getX(0) : 0, b = m.skeleton.bones[bi];
+    out.multiplyMatrices(b.matrixWorld, m.skeleton.boneInverses[bi]).multiply(m.bindMatrix).premultiply(m.bindMatrixInverse).premultiply(m.matrixWorld);
+  } else out.copy(m.matrixWorld);
+  return out;
+}
+function pieceInfo(m, c){
+  let item = null; for (let p = m.parent; p; p = p.parent){ if (p.userData && p.userData.sig){ item = p.userData.sig.split('#')[0]; break; } }
+  const cn = cleanTakeName(c ? (c.name || 'karakter_' + (c.slotI+1)) : 'floor');
+  const part = item ? (item === 'book' ? 'book' : 'item') : (m.userData.part || 'item');
+  return { char: cn, part, label: item || m.name || part };
+}
+const cleanTakeName = s => (String(s).normalize('NFD').replace(/[^\w]+/g, '_').replace(/^_+|_+$/g, '') || 'x').slice(0, 40);
+function takeStart(){
+  if (TAKE.on) return;
+  Object.assign(TAKE, { on:true, t0:performance.now(), cam:[], fx:[], env:[], mouse:[], misc:[], pieces:new Map(), order:[], speech:[], seenBub:new WeakMap(),
+    w: renderer.domElement.width, h: renderer.domElement.height, fps: +$('#optFps').value || 25, envSeen:new Set() });
+  $('#takeBtn').classList.add('rec'); $('#takeBtn').setAttribute('aria-pressed','true'); $('#recPill').classList.add('on');
+  toast('Opname gestart');
+}
+function takeSample(){
+  const t = takeTime();
+  // camera (+ the lens shift used on the skill screen) and lights
+  const v = camera.view, cw = v && v.enabled ? v.width : 1, ch = v && v.enabled ? v.height : 1;
+  const winx = v && v.enabled ? (v.offsetX + v.width/2 - v.fullWidth/2) / v.width : 0, winy = v && v.enabled ? -(v.offsetY + v.height/2 - v.fullHeight/2) / v.height : 0;
+  camera.getWorldPosition(_tv); camera.getWorldQuaternion(_tq);
+  TAKE.cam.push([t, _tv.x, _tv.y, _tv.z, _tq.x, _tq.y, _tq.z, _tq.w, camera.fov / (camera.zoom||1), winx, winy, camera.aspect]);
+  // rooms: which are visible (both during a wipe), the white fade of the skill screen, light levels
+  const vis = ENVS.map(e => !!(e.group && e.group.visible)); ENVS.forEach((e,i)=>{ if (vis[i]) TAKE.envSeen.add(i); });
+  const kd = _tv2.copy(key.position).sub(key.target.position).normalize();
+  TAKE.env.push([t, vis, ROOM_WHITE.value, key.intensity, kd.x, kd.y, kd.z, rimL.intensity, rimR.intensity, hemi.intensity, renderer.toneMappingExposure, SKT.open ? 1 : 0]);
+  // pieces: every visible mesh of every character + things lying on the floor
+  scene.updateMatrixWorld(true);
+  const frame = new Map();
+  const visit = (root, c) => root.traverse(m => {
+    if (!m.isMesh || !m.geometry || !m.geometry.attributes.position || m.userData.noExport) return;
+    if (c && m === c.blob) return;
+    if (!worldVisible(m)) return;
+    let P = TAKE.pieces.get(m.uuid);
+    if (!P){ P = { mesh:m, geo:m.geometry, ...pieceInfo(m, c), keys:[] }; TAKE.pieces.set(m.uuid, P); TAKE.order.push(P); }
+    pieceMatrix(m, _tm);
+    const mat = Array.isArray(m.material) ? m.material[0] : m.material, col = mat && mat.color, em = mat && mat.emissive;
+    const e = _tm.elements;
+    P.keys.push([TAKE.cam.length - 1, e[0],e[1],e[2], e[4],e[5],e[6], e[8],e[9],e[10], e[12],e[13],e[14],
+      col ? col.r : 1, col ? col.g : 1, col ? col.b : 1, em ? Math.max(em.r, em.g, em.b) : 0, mat && mat.transparent ? mat.opacity : 1]);
+  });
+  for (const c of chars) visit(c.turntable, c);
+  for (const h of floorProps) visit(h, null);
+  // particles (confetti, dust): one point each
+  const fx = [];
+  for (const p of parts){ if (!p.visible) continue; p.getWorldQuaternion(_tq);
+    fx.push(+p.position.x.toFixed(4), +p.position.y.toFixed(4), +p.position.z.toFixed(4), +_tq.x.toFixed(4), +_tq.y.toFixed(4), +_tq.z.toFixed(4), +_tq.w.toFixed(4),
+      +(p.scale.x * 0.045).toFixed(4), +p.material.color.r.toFixed(3), +p.material.color.g.toFixed(3), +p.material.color.b.toFixed(3), +p.material.opacity.toFixed(3), p.userData.dust ? 1 : 0); }
+  TAKE.fx.push([t, fx]);
+  // mouse: screen position + the point under it on a plane through the active character, facing the camera
+  let wx = 0, wy = 0, wz = 0;
+  if (active){ active.turntable.getWorldPosition(_tv); _tv.y += 1.0*CHAR_SCALE; camera.getWorldDirection(_tv2);
+    _tPlane.setFromNormalAndCoplanarPoint(_tv2.negate(), _tv); _tRay.setFromCamera(mouse.ndc, camera);
+    const hit = _tRay.ray.intersectPlane(_tPlane, _tv); if (hit){ wx = hit.x; wy = hit.y; wz = hit.z; } }
+  TAKE.mouse.push([t, wx, wy, wz, mouse.ndc.x, mouse.ndc.y, press.on ? 1 : 0, grabC ? 1 : 0, mouse.inside ? 1 : 0]);
+  // speech bubbles: one event per new line
+  for (const c of chars){ const b = c.bubble; if (!b || !b.el.parentNode || TAKE.seenBub.get(b) === b.t0) continue;
+    TAKE.seenBub.set(b, b.t0); TAKE.speech.push({ char: cleanTakeName(c.name || 'karakter_' + (c.slotI+1)), t, until: t + Math.max(0.3, b.until - b.t0), text: b.el.classList.contains('dots') ? '...' : b.el.textContent }); }
+  const sec = Math.floor(t); if (sec !== TAKE.sec){ TAKE.sec = sec; $('#recTime').textContent = Math.floor(sec/60) + ':' + String(sec%60).padStart(2,'0'); }
+}
+// ---- resampling to a fixed frame rate
+function takeFrames(dur, fps){ const n = Math.max(1, Math.floor(dur * fps + 1e-6) + 1), out = []; for (let i=0;i<n;i++) out.push(i / fps); return out; }
+function seek(arr, t, st){ while (st.i < arr.length - 2 && arr[st.i+1][0] < t) st.i++; const a = arr[st.i], b = arr[Math.min(st.i+1, arr.length-1)];
+  const u = b[0] > a[0] ? THREE.MathUtils.clamp((t - a[0]) / (b[0] - a[0]), 0, 1) : 0; return [a, b, u]; }
+const r4 = v => +(+v).toFixed(4);
+async function takeStop(){
+  if (!TAKE.on) return; TAKE.on = false;
+  $('#takeBtn').classList.remove('rec'); $('#takeBtn').setAttribute('aria-pressed','false'); $('#recPill').classList.remove('on');
+  const dur = TAKE.cam.length ? TAKE.cam[TAKE.cam.length-1][0] : 0;
+  if (dur < 0.2){ toast('Opname te kort'); return; }
+  toast('Houdini take maken…'); await new Promise(r=>setTimeout(r,30));
+  try { await takeExport(dur); } catch (err){ console.error(err); toast('Export mislukt: ' + err.message); }
+}
+function geoW(){ return { P:[], Cd:[], vtx:[], pn:[], pp:[], pc:[], names:new Map(), partsM:new Map(), charsM:new Map() }; }
+const gStr = (map, s) => { let i = map.get(s); if (i === undefined){ i = map.size; map.set(s, i); } return i; };
+// add a geometry's triangles (positions transformed by M) to a writer; points shared where position + colour match
+function geoAdd(W, geo, M, cdFn, name, partFn, charName){
+  const pos = geo.attributes.position, col = geo.attributes.color, idx = geo.index, nt = (idx ? idx.count : pos.count) / 3;
+  const seen = new Map(), v = new THREE.Vector3(), ids = [0,0,0];
+  const nameI = gStr(W.names, name), charI = gStr(W.charsM, charName || '');
+  for (let t=0;t<nt;t++){
+    const part = partFn(t*3), partI = gStr(W.partsM, part);
+    for (let k=0;k<3;k++){
+      const i = idx ? idx.getX(t*3+k) : t*3+k;
+      v.fromBufferAttribute(pos, i); if (M) v.applyMatrix4(M);
+      const cd = cdFn(i, t*3), key = v.x.toFixed(5)+','+v.y.toFixed(5)+','+v.z.toFixed(5)+'|'+cd[0].toFixed(3)+cd[1].toFixed(3)+cd[2].toFixed(3);
+      let id = seen.get(key);
+      if (id === undefined){ id = W.P.length/3; seen.set(key, id); W.P.push(+v.x.toFixed(5), +v.y.toFixed(5), +v.z.toFixed(5)); W.Cd.push(+cd[0].toFixed(4), +cd[1].toFixed(4), +cd[2].toFixed(4)); }
+      ids[k] = id;
+    }
+    if (ids[0]===ids[1] || ids[1]===ids[2] || ids[0]===ids[2]) continue;
+    W.vtx.push(ids[0], ids[2], ids[1]);   // Houdini winds clockwise
+    W.pn.push(nameI); W.pp.push(partI); W.pc.push(charI);
+  }
+}
+function geoJSON(W){   // Houdini JSON .geo (same layout Polderstad writes)
+  const np = W.P.length/3, nv = W.vtx.length, npr = nv/3, out = [];
+  const tuples = (a, n) => { const r = []; for (let i=0;i<a.length;i+=n) r.push('[' + a.slice(i,i+n).join(',') + ']'); return r.join(','); };
+  const num = (name, size, arr, opts) => `[["scope","public","type","numeric","name","${name}","options",{${opts||''}}],["size",${size},"storage","fpreal32","defaults",["size",1,"storage","fpreal64","values",[0]],"values",["size",${size},"storage","fpreal32","tuples",[${tuples(arr,size)}]]]]`;
+  const str = (name, map, idx) => `[["scope","public","type","string","name","${name}","options",{}],["size",1,"storage","int32","strings",[${[...map.keys()].map(x=>JSON.stringify(x)).join(',')}],"indices",["size",1,"storage","int32","arrays",[[${idx.join(',')}]]]]]`;
+  out.push(`["fileversion","20.5.613","hasindex",false,"pointcount",${np},"vertexcount",${nv},"primitivecount",${npr},"info",{"software":"VAST character creator"},"topology",["pointref",["indices",[${W.vtx.join(',')}]]],"attributes",["pointattributes",[`);
+  out.push(num('P', 3, W.P, '"type":{"type":"string","value":"point"}') + ',' + num('Cd', 3, W.Cd, '"type":{"type":"string","value":"color"}'));
+  out.push('],"primitiveattributes",[' + str('name', W.names, W.pn) + ',' + str('part', W.partsM, W.pp) + ',' + str('char', W.charsM, W.pc) + ']]');
+  out.push(`,"primitives",[[["type","Polygon_run"],["startvertex",0,"nprimitives",${npr},"nvertices_rle",[3,${npr}]]]]]`);
+  return out.join('');
+}
+async function takeExport(dur){
+  const fps = TAKE.fps, times = takeFrames(dur, fps), nf = times.length, white = [1,1,1];
+  // characters: every piece once, in its own space
+  // frame → bracketing sample index + blend
+  const sIdx = [], sU = []; { let i = 0; const C = TAKE.cam; for (const t of times){ while (i < C.length - 2 && C[i+1][0] < t) i++; const a = C[i], b = C[Math.min(i+1, C.length-1)]; sIdx.push(i); sU.push(b[0] > a[0] ? THREE.MathUtils.clamp((t - a[0]) / (b[0] - a[0]), 0, 1) : 0); } }
+  const CW = geoW(), pieces = [], used = new Map();
+  for (const P of TAKE.order){
+    if (P.keys.length === 0) continue; P.byS = new Map(P.keys.map(k => [k[0], k]));
+    let nm = P.char + '_' + cleanTakeName(P.label), k = used.get(nm) || 0; used.set(nm, k+1); if (k) nm += '_' + (k+1);
+    const pt0 = CW.P.length/3, pr0 = CW.pn.length, col = P.geo.attributes.color;
+    geoAdd(CW, P.geo, null, i => col ? [col.getX(i), col.getY(i), col.getZ(i)] : white, nm, () => P.part, P.char);
+    // per frame: 3x4 matrix (lerped between samples) or null when hidden; tint keys only where it changes
+    const m = [], tint = []; let last = '';
+    for (let f=0; f<nf; f++){
+      // bracketing samples of the whole take; the piece is shown where it existed in the nearer one
+      const sa = sIdx[f], sb = Math.min(sa + 1, TAKE.cam.length - 1), su = sU[f], ka = P.byS.get(sa), kb = P.byS.get(sb);
+      const near = su < 0.5 ? ka : kb; if (!near){ m.push(null); continue; }
+      const a = ka || kb, b = kb || ka, u = ka && kb ? su : 0, L = j => a[j] + (b[j]-a[j])*u;
+      m.push([L(1),L(2),L(3),L(4),L(5),L(6),L(7),L(8),L(9),L(10),L(11),L(12)].map(r4));
+      const tt = [L(13),L(14),L(15),L(16),L(17)].map(x=>+x.toFixed(3)), key = tt.join(',');
+      if (key !== last){ tint.push([f+1, ...tt]); last = key; }
+    }
+    pieces.push({ name:nm, char:P.char, part:P.part, pt0, npt:CW.P.length/3 - pt0, pr0, npr:CW.pn.length - pr0, m, tint });
+  }
+  // environment: rooms that were on screen, in world space
+  const EW = geoW(), envs = [];
+  for (const i of [...TAKE.envSeen].sort()){
+    const e = ENVS[i]; if (!e.group) continue; e.group.updateMatrixWorld(true);
+    const partOf = mt => mt === e.matF ? 'floor' : mt === e.matC ? 'ceiling' : mt === e.mat2 ? 'furniture' : 'wall';
+    e.group.traverse(m => { if (!m.isMesh) return;
+      const mats = Array.isArray(m.material) ? m.material : [m.material], groups = m.geometry.groups;
+      const matAt = vi => { if (!groups.length || !Array.isArray(m.material)) return mats[0]; for (const g of groups) if (vi >= g.start && vi < g.start + g.count) return mats[g.materialIndex]; return mats[0]; };
+      geoAdd(EW, m.geometry, m.matrixWorld, (i, vi) => { const c = matAt(vi).color; return [c.r, c.g, c.b]; }, cleanTakeName(e.id), vi => partOf(matAt(vi)), cleanTakeName(e.name));
+    });
+    envs.push({ name: cleanTakeName(e.id), label: e.name, index: i });
+  }
+  // camera, rooms, lights, mouse, particles resampled to frames
+  const cam = { f0:1, tx:[], ty:[], tz:[], rx:[], ry:[], rz:[], focal:[], winx:[], winy:[] }, aspect0 = TAKE.w / TAKE.h;
+  const env = { vis: envs.map(()=>[]), white:[], skill:[], key:[], keyDir:[], rimL:[], rimR:[], hemi:[], exposure:[] };
+  const mo = { tx:[], ty:[], tz:[], ndcx:[], ndcy:[], down:[], grab:[], inside:[] }, fxOut = [];
+  const sc = { i:0 }, se = { i:0 }, sm = { i:0 }, sf = { i:0 }; let prev = null;
+  const qa = new THREE.Quaternion(), qb = new THREE.Quaternion(), eu = new THREE.Euler();
+  for (let f=0; f<nf; f++){
+    const t = times[f];
+    { const [a, b, u] = seek(TAKE.cam, t, sc), L = j => a[j] + (b[j]-a[j])*u;
+      qa.set(a[4],a[5],a[6],a[7]); qb.set(b[4],b[5],b[6],b[7]); qa.slerp(qb, u); eu.setFromQuaternion(qa, 'YXZ');   // = Houdini rotate order zxy
+      let r = [eu.x, eu.y, eu.z].map(THREE.MathUtils.radToDeg); if (prev) r = r.map((x,k) => x + 360*Math.round((prev[k]-x)/360)); prev = r;
+      cam.tx.push(r4(L(1))); cam.ty.push(r4(L(2))); cam.tz.push(r4(L(3))); cam.rx.push(r4(r[0])); cam.ry.push(r4(r[1])); cam.rz.push(r4(r[2]));
+      const asp = L(11) || aspect0; cam.focal.push(r4((36 / asp / 2) / Math.tan(THREE.MathUtils.degToRad(L(8)) / 2))); cam.winx.push(r4(L(9))); cam.winy.push(r4(L(10))); }
+    { const [a, b, u] = seek(TAKE.env, t, se), n = u < 0.5 ? a : b, L = j => a[j] + (b[j]-a[j])*u;
+      envs.forEach((e, k) => env.vis[k].push(n[1][e.index] ? 1 : 0)); env.white.push(r4(L(2))); env.skill.push(n[11]);
+      env.key.push(r4(L(3))); env.keyDir.push([r4(L(4)), r4(L(5)), r4(L(6))]); env.rimL.push(r4(L(7))); env.rimR.push(r4(L(8))); env.hemi.push(r4(L(9))); env.exposure.push(r4(L(10))); }
+    { const [a, b, u] = seek(TAKE.mouse, t, sm), L = j => a[j] + (b[j]-a[j])*u, n = u < 0.5 ? a : b;
+      mo.tx.push(r4(L(1))); mo.ty.push(r4(L(2))); mo.tz.push(r4(L(3))); mo.ndcx.push(r4(L(4))); mo.ndcy.push(r4(L(5))); mo.down.push(n[6]); mo.grab.push(n[7]); mo.inside.push(n[8]); }
+    { const [a, b, u] = seek(TAKE.fx, t, sf); fxOut.push((u < 0.5 ? a : b)[1]); }
+  }
+  const name = cleanTakeName(($('#name').value.trim() || 'karakter') + '_take');
+  const anim = {
+    version: 1, app: 'vast_character_creator', name, fps, frames: nf, resx: TAKE.w, resy: TAKE.h, aperture: 36,
+    cam, pieces, envs, env, mouse: mo, fx: { stride: 13, frames: fxOut, box: 0.045 },
+    speech: TAKE.speech.map(s => ({ char: s.char, f: Math.round(s.t*fps)+1, f_end: Math.round(s.until*fps)+1, text: s.text })),
+  };
+  const readme = `VAST character creator take for Houdini 20.5 (classic /obj, no USD / Solaris)
+
+In Houdini: shelf "VAST" > "Import Character Take", pick this zip (or the unzipped folder).
+(Shelf file + importer: VAST_Claude/houdini_tools/vast_cc.shelf and vast_cc_houdini.py)
+
+characters.geo   every body part / item / book as a rigid piece in its own space. prim attribs: name (piece), part (skin, cap,
+                 top, sleeve, bottom, shoes, item, book), char; point Cd = item vertex colours (white for body parts)
+environment.geo  the grey rooms seen during the take, world space. prim attribs: name (room id), part (wall, floor, ceiling, furniture)
+anim.json        ${nf} frames @ ${fps} fps, ${TAKE.w}x${TAKE.h}:
+                   pieces[].m    3x4 world matrix per frame (column-major rotation | translation), null = hidden
+                   pieces[].tint [frame, r, g, b, glow, alpha] whenever the material colour changes
+                   cam           tx ty tz rx ry rz (deg, rotate order ZXY), focal (mm, 36 mm aperture), winx/winy lens shift
+                   env           room visibility, white fade (skill screen), skill screen on/off, light levels, key light direction
+                   mouse         world point under the cursor (plane through the character), ndc x/y, down, grab, inside
+                   fx.frames     per frame flat list of particles, 13 values each: P(3) orient(4) size r g b alpha dust
+                   speech        speech bubble lines with start / end frame
+Units: metres, Y-up.
+`;
+  const files = [[name + '/characters.geo', geoJSON(CW)], [name + '/environment.geo', geoJSON(EW)], [name + '/anim.json', JSON.stringify(anim)], [name + '/README.txt', readme]];
+  const zip = takeZip(files);
+  window.__lastTake = { anim, files, zip };   // for debugging / tests
+  if (window.__takeNoDownload) return;
+  const a = document.createElement('a'); a.href = URL.createObjectURL(zip); a.download = name + '.zip'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href), 4000);
+  window.__lastTake = { anim, files };   // for debugging / tests
+  toast(`Houdini take: ${nf} frames, ${pieces.length} delen`);
+}
+function takeZip(files){   // stored (uncompressed) zip
+  const crcT = new Uint32Array(256).map((_, n) => { let c = n; for (let k=0;k<8;k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
+  const crc = d => { let c = 0xffffffff; for (let i=0;i<d.length;i++) c = crcT[(c ^ d[i]) & 255] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
+  const enc = new TextEncoder(), parts = [], cd = []; let off = 0;
+  for (const [nm, text] of files){
+    const nb = enc.encode(nm), data = typeof text === 'string' ? enc.encode(text) : text, c = crc(data), h = new DataView(new ArrayBuffer(30));
+    h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint16(8, 0, true); h.setUint32(14, c, true); h.setUint32(18, data.length, true); h.setUint32(22, data.length, true); h.setUint16(26, nb.length, true);
+    parts.push(h.buffer, nb, data);
+    const e = new DataView(new ArrayBuffer(46)); e.setUint32(0, 0x02014b50, true); e.setUint16(4, 20, true); e.setUint16(6, 20, true); e.setUint32(16, c, true); e.setUint32(20, data.length, true); e.setUint32(24, data.length, true); e.setUint16(28, nb.length, true); e.setUint32(42, off, true);
+    cd.push(e.buffer, nb); off += 30 + nb.length + data.length;
+  }
+  const cdSize = cd.reduce((a, b) => a + b.byteLength, 0), end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true); end.setUint16(8, files.length, true); end.setUint16(10, files.length, true); end.setUint32(12, cdSize, true); end.setUint32(16, off, true);
+  return new Blob([...parts, ...cd, end.buffer], { type: 'application/zip' });
+}
+$('#takeBtn').onclick = () => TAKE.on ? takeStop() : takeStart();
+$('#recStop').onclick = () => takeStop();
+
+/* ============================================================
    LAYOUT + LOOP
    ============================================================ */
 let baseFov = 45, baseYaw = 0, parallaxK = 1, layoutZ = 1;
@@ -3146,6 +3397,7 @@ function loop(){
 
   renderer.render(scene, camera);
   updateBubbles();
+  if (TAKE.on) takeSample();
   if (HAND) HAND(dt);
 }
 const elastic = x => x===1?1 : Math.pow(2,-9*x)*Math.sin((x*9-0.75)*(2*Math.PI)/3)+1;
